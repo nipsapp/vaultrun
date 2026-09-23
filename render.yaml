@@ -4,9 +4,8 @@ services:
     name: vaultrun
     runtime: node
     plan: free
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
