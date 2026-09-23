@@ -379,3 +379,14 @@ body.art-ready .logo {
   .meters, .controls { grid-column: 2; }
 }
 /* Casino refresh */
+
+/* Immediate mechanical button response without moving the surrounding HUD. */
+.spin.busy { animation: spin-press 220ms ease-out; }
+@keyframes spin-press {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.95); filter: brightness(1.25); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin.busy { animation: none; }
+}

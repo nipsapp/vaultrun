@@ -1,14 +1,40 @@
 /**
- * Vault Run — Web Audio SFX (no external assets)
+ * Vault Run — casino pack SFX + BGM (assets/audio)
+ * Falls back to light synth tones if a file fails to load.
  */
 window.VR = window.VR || {};
 
 VR.Audio = (function () {
-  let ctx = null;
+  const BASE = "assets/audio/";
+  const FILES = {
+    bgm: "bgm.mp3",
+    click: "click.mp3",
+    spin: "spin.mp3",
+    spinBtn: "spin_btn.mp3",
+    stop: "stop.wav",
+    stopColumn: "stop_column.mp3",
+    win: "win.mp3",
+    bigWin: "bigwin.mp3",
+    bonus: "bonus.mp3",
+    bonusPopup: "bonus_popup.mp3",
+    cascade: "cascade.mp3",
+    collect: "collect.mp3",
+    mult: "mult.mp3",
+    levelup: "levelup.mp3",
+    jackpot: "jackpot.mp3",
+    scatter: "scatter.wav",
+    reward: "reward.mp3"
+  };
+
   let muted = false;
+  let unlocked = false;
+  let buffers = {};
+  let bgmEl = null;
+  let spinLoop = null;
+  let ctx = null;
   let master = null;
 
-  function ensure() {
+  function ensureSynth() {
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       master = ctx.createGain();
@@ -21,8 +47,8 @@ VR.Audio = (function () {
 
   function tone(freq, dur, type, gain, when) {
     if (muted) return;
-    const ac = ensure();
-    const t0 = (when || ac.currentTime);
+    const ac = ensureSynth();
+    const t0 = when || ac.currentTime;
     const o = ac.createOscillator();
     const g = ac.createGain();
     o.type = type || "sine";
@@ -36,69 +62,164 @@ VR.Audio = (function () {
     o.stop(t0 + dur + 0.02);
   }
 
-  function noise(dur, gain) {
-    if (muted) return;
-    const ac = ensure();
-    const n = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
-    const d = n.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    const src = ac.createBufferSource();
-    src.buffer = n;
-    const g = ac.createGain();
-    g.gain.value = gain || 0.12;
-    src.connect(g);
-    g.connect(master);
-    src.start();
+  function loadOne(key, file) {
+    return new Promise((resolve) => {
+      const a = new Audio();
+      a.preload = "auto";
+      a.src = BASE + file;
+      const done = () => {
+        buffers[key] = a;
+        resolve(true);
+      };
+      a.addEventListener("canplaythrough", done, { once: true });
+      a.addEventListener("error", () => {
+        console.warn("[audio] missing", file);
+        resolve(false);
+      });
+      a.load();
+    });
+  }
+
+  async function preload() {
+    await Promise.all(Object.keys(FILES).map((k) => loadOne(k, FILES[k])));
+    if (buffers.bgm) {
+      bgmEl = buffers.bgm;
+      bgmEl.loop = true;
+      bgmEl.volume = 0.28;
+    }
+  }
+
+  // kick off load early
+  const ready = preload();
+
+  function play(key, opts) {
+    opts = opts || {};
+    if (muted) return null;
+    const src = buffers[key];
+    if (!src) return null;
+    try {
+      const a = src.cloneNode();
+      a.volume = opts.volume != null ? opts.volume : 0.7;
+      if (opts.loop) a.loop = true;
+      const p = a.play();
+      if (p && p.catch) p.catch(() => {});
+      return a;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function stopEl(el) {
+    if (!el) return;
+    try {
+      el.pause();
+      el.currentTime = 0;
+    } catch (e) {}
+  }
+
+  function startBgm() {
+    if (muted || !bgmEl) return;
+    try {
+      bgmEl.volume = 0.28;
+      const p = bgmEl.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+  }
+
+  function stopBgm() {
+    stopEl(bgmEl);
   }
 
   return {
+    ready,
     unlock() {
-      ensure();
+      if (unlocked) return;
+      unlocked = true;
+      ensureSynth();
+      ready.then(() => startBgm());
     },
     setMuted(m) {
       muted = !!m;
-      if (master) master.gain.value = muted ? 0 : 0.35;
+      if (muted) {
+        stopBgm();
+        stopEl(spinLoop);
+        spinLoop = null;
+        if (master) master.gain.value = 0;
+      } else {
+        if (master) master.gain.value = 0.35;
+        if (unlocked) startBgm();
+      }
     },
     isMuted() {
       return muted;
     },
     spin() {
-      tone(180, 0.08, "square", 0.08);
-      tone(90, 0.15, "sawtooth", 0.05);
+      stopEl(spinLoop);
+      spinLoop = play("spin", { volume: 0.45, loop: true });
+      if (!spinLoop) {
+        play("spinBtn", { volume: 0.6 });
+        tone(180, 0.08, "square", 0.08);
+      }
+    },
+    cancelSpin() {
+      stopEl(spinLoop);
+      spinLoop = null;
+    },
+    reelStop() {
+      if (!play("stopColumn", { volume: 0.4 })) tone(240, 0.045, "triangle", 0.08);
     },
     stop() {
-      tone(220, 0.05, "triangle", 0.1);
-      tone(330, 0.08, "sine", 0.08);
+      stopEl(spinLoop);
+      spinLoop = null;
+      if (!play("stop", { volume: 0.65 })) {
+        if (!play("stopColumn", { volume: 0.55 })) {
+          tone(220, 0.05, "triangle", 0.1);
+          tone(330, 0.08, "sine", 0.08);
+        }
+      }
     },
     win() {
-      tone(440, 0.1, "sine", 0.15);
-      tone(554, 0.12, "sine", 0.12, ensure().currentTime + 0.08);
-      tone(659, 0.18, "sine", 0.1, ensure().currentTime + 0.16);
+      if (!play("win", { volume: 0.75 })) {
+        tone(440, 0.1, "sine", 0.15);
+        tone(554, 0.12, "sine", 0.12, ensureSynth().currentTime + 0.08);
+      }
     },
     cascade() {
-      tone(520 + Math.random() * 80, 0.07, "triangle", 0.1);
-      noise(0.05, 0.06);
+      if (!play("cascade", { volume: 0.55 })) {
+        tone(520 + Math.random() * 80, 0.07, "triangle", 0.1);
+      }
     },
     collect() {
-      tone(880, 0.08, "sine", 0.12);
-      tone(1174, 0.12, "sine", 0.1, ensure().currentTime + 0.06);
+      if (!play("collect", { volume: 0.7 })) {
+        if (!play("reward", { volume: 0.65 })) {
+          tone(880, 0.08, "sine", 0.12);
+        }
+      }
     },
     bonus() {
-      [523, 659, 784, 1046].forEach((f, i) => {
-        tone(f, 0.2, "sine", 0.14, ensure().currentTime + i * 0.1);
-      });
+      play("bonusPopup", { volume: 0.7 });
+      if (!play("bonus", { volume: 0.75 })) {
+        play("scatter", { volume: 0.7 });
+      }
     },
     bigWin() {
-      for (let i = 0; i < 8; i++) {
-        tone(300 + i * 80, 0.15, "sawtooth", 0.08, ensure().currentTime + i * 0.07);
+      if (!play("bigWin", { volume: 0.85 })) {
+        if (!play("jackpot", { volume: 0.8 })) {
+          for (let i = 0; i < 6; i++) {
+            tone(300 + i * 80, 0.15, "sawtooth", 0.08, ensureSynth().currentTime + i * 0.07);
+          }
+        }
       }
     },
     click() {
-      tone(600, 0.03, "square", 0.06);
+      if (!play("click", { volume: 0.5 })) tone(600, 0.03, "square", 0.06);
     },
     heat() {
-      tone(140, 0.2, "sawtooth", 0.1);
-      tone(280, 0.15, "square", 0.06, ensure().currentTime + 0.05);
+      if (!play("mult", { volume: 0.65 })) {
+        if (!play("levelup", { volume: 0.6 })) {
+          tone(140, 0.2, "sawtooth", 0.1);
+        }
+      }
     }
   };
 })();

@@ -556,11 +556,17 @@ VR.Engine = (function () {
     return emptyGrid(C().rowsBase);
   }
 
+  function rowsOf(grid) {
+    if (!grid || !grid.length) return C().rowsBase;
+    return (grid[0] && grid[0].length) || C().rowsBase;
+  }
+
   return {
     seed,
     playSpin,
     cloneGrid,
     createEmptyGrid,
+    rowsOf,
     // stubs kept so old callers don't crash
     createBlockMask: function () {
       return null;

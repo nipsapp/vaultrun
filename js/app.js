@@ -12,6 +12,7 @@ VR.App = (function () {
     bet: 1,
     lastWin: 0,
     busy: false,
+    ready: false,
     muted: false,
     autoLeft: 0,
     inBonus: false,
@@ -36,27 +37,42 @@ VR.App = (function () {
 
     VR.UI.setStatus("Loading…");
     try {
-      await VR.Assets.init();
+      await VR.Assets.init(progress => VR.Loading?.progress(progress * 85, "Loading the vault…"));
     } catch (e) {
       console.warn(e);
     }
     document.body.classList.add("art-ready");
+    VR.Loading?.progress(88, "Preparing your session…");
 
-    const up = await VR.API.probe();
-    if (up) {
-      try {
-        const session = await VR.API.ensureAuth();
+    try {
+      const up = await Promise.race([
+        VR.API.probe(),
+        new Promise((r) => setTimeout(() => r(false), 1500))
+      ]);
+      if (up) {
+        const session = await Promise.race([
+          VR.API.ensureAuth(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("auth timeout")), 4000))
+        ]);
         state.serverMode = true;
-        if (session && session.balance != null) state.balance = session.balance;
-        else {
-          const st = await VR.API.state();
-          state.balance = st.balance;
+        if (session && session.balance != null) {
+          state.balance = session.balance;
+        } else {
+          try {
+            const st = await Promise.race([
+              VR.API.state(),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("state timeout")), 3000))
+            ]);
+            state.balance = st.balance;
+          } catch (_) {
+            /* keep startBalance */
+          }
         }
         VR.UI.toast("Connected to game server");
-      } catch (e) {
-        console.warn("Auth failed, local mode", e);
-        state.serverMode = false;
       }
+    } catch (e) {
+      console.warn("Auth failed, local mode", e);
+      state.serverMode = false;
     }
 
     state.grid = VR.Engine.createEmptyGrid();
@@ -99,6 +115,9 @@ VR.App = (function () {
 
     document.body.addEventListener("pointerdown", () => VR.Audio.unlock(), { once: true });
 
+    if (VR.Loading) await VR.Loading.finish();
+    state.ready = true;
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     }
@@ -118,7 +137,7 @@ VR.App = (function () {
 
   async function requestSpin(opts) {
     opts = opts || {};
-    if (state.busy) return;
+    if (state.busy || !state.ready) return;
     VR.Audio.unlock();
 
     const mode = opts.mode || "base";
@@ -134,35 +153,41 @@ VR.App = (function () {
 
     state.busy = true;
     state.inBonus = false;
+    state.breachMult = 1;
+    state.lastWin = 0;
     VR.UI.refresh(state);
 
     try {
       VR.UI.setStatus("Spinning…");
       VR.Audio.spin();
 
-      let result;
-
+      let resultPromise;
       if (state.serverMode) {
-        const res = await VR.API.spin({
-          bet: state.bet,
-          mode,
+        resultPromise = VR.API.spin({ bet: state.bet, mode,
           forceBonus: mode !== "base" ? mode : null
+        }).then(res => {
+          state.balance = res.balance;
+          return res.result;
         });
-        state.balance = res.balance;
-        result = res.result;
-        await playTimeline(result, { skipWallet: true });
       } else {
         state.balance = +(state.balance - cost).toFixed(2);
-        state.lastWin = 0;
         VR.UI.refresh(state);
-        result = VR.Engine.playSpin({ bet: state.bet, mode });
-        await playTimeline(result, { skipWallet: false });
+        resultPromise = Promise.resolve(VR.Engine.playSpin({ bet: state.bet, mode }));
       }
+      await VR.Render.animateSpin(state.grid, resultPromise.then(result => result.steps[0].grid), 2100,
+        { onReelStopped: c => VR.Audio.reelStop(c) });
+      const result = await resultPromise;
+      state.grid = result.steps[0].grid;
+      await playTimeline(result, { skipWallet: state.serverMode });
     } catch (err) {
+      state.autoLeft = 0;
       console.error(err);
       VR.UI.toast(err.message || "Spin failed");
       if (err.status === 401) state.serverMode = false;
     } finally {
+      VR.Audio.cancelSpin();
+      VR.Render.clearFlash();
+      VR.Render.clearAnim();
       state.busy = false;
       state.inBonus = false;
       VR.UI.refresh(state);
@@ -172,25 +197,23 @@ VR.App = (function () {
     if (state.autoLeft > 0) {
       state.autoLeft -= 1;
       VR.UI.refresh(state);
-      await wait(520);
-      requestSpin();
+      if (state.autoLeft > 0) {
+        await wait(520);
+        requestSpin();
+      }
     }
   }
 
   async function playTimeline(result, flags) {
     flags = flags || {};
-    const first = result.steps[0] && result.steps[0].grid;
-    if (first) {
-      await VR.Render.animateSpin(state.grid, first, 2100);
-      state.grid = first;
-      VR.Render.drawFrame(state.grid);
-    }
     VR.Audio.stop();
     await wait(160);
 
     for (let i = 1; i < result.steps.length; i++) {
       const step = result.steps[i];
-      if (step.grid) state.grid = step.grid;
+      // tumbleWin.grid is already exploded in existing server books.
+      // Keep the displayed board until its winners have been presented.
+      if (step.grid && !["tumbleWin", "tumble", "fsSpin", "fsStart"].includes(step.type)) state.grid = step.grid;
 
       if (step.type === "tumbleWin") {
         const pos = [];
@@ -202,15 +225,16 @@ VR.App = (function () {
             VR.UI.money(step.total)
         );
         VR.Audio.win();
-        await VR.Render.playWinAnim(state.grid, pos, 900);
-        await wait(180);
+        await VR.Render.playWinAnim(state.grid, pos, 1000, step.wins);
+        await VR.Render.animateRemove(state.grid, step.removed || pos);
+        state.grid = step.grid;
         VR.Render.clearFlash();
         VR.Render.drawFrame(state.grid);
       } else if (step.type === "tumble") {
-        await VR.Render.animateSpin(state.grid, step.grid, 900, { respin: true });
+        VR.Audio.cascade();
+        await VR.Render.animateTumble(state.grid, step.grid);
         state.grid = step.grid;
         VR.Render.drawFrame(state.grid);
-        VR.Audio.cascade();
         await wait(100);
       } else if (step.type === "breach") {
         state.breachMult = step.breachMult || 1;
@@ -240,7 +264,9 @@ VR.App = (function () {
         state.gauge = step.gauge || state.gauge;
         VR.UI.refresh(state);
         VR.UI.setStatus((step.gaugeName || "FS") + " · " + step.spinsLeft + " left");
-        await VR.Render.animateSpin(state.grid, step.grid, 1400);
+        VR.Audio.spin();
+        await VR.Render.animateSpin(state.grid, step.grid, 1400, { onReelStopped: c => VR.Audio.reelStop(c) });
+        VR.Audio.stop();
         state.grid = step.grid;
         VR.Render.drawFrame(state.grid);
         await wait(120);

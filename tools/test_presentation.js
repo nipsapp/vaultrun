@@ -1,0 +1,131 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const root = path.join(__dirname, '..');
+const source = f => fs.readFileSync(path.join(root, f), 'utf8');
+function engine() {
+  const VR = {};
+  const scope = { VR, window: { VR }, console };
+  vm.createContext(scope);
+  for (const f of ['config', 'engine']) vm.runInContext(source('js/' + f + '.js'), scope);
+  return { VR, scope };
+}
+async function rendererTest(hz, delayed = false) {
+  const { VR, scope } = engine();
+  let clock = 0, queued = [], events = [], drawn = [];
+  const canvasContext = new Proxy({}, { get: (_, key) => (...args) => {
+    if (key === 'fillRect' && args[0] === 0 && args[1] === 0) drawn = [];
+  }, set: () => true });
+  Object.assign(scope, {
+    performance: { now: () => clock },
+    requestAnimationFrame: cb => queued.push(cb),
+    CustomEvent: class { constructor(type, init) { this.detail = init.detail; } }
+  });
+  Object.assign(scope.window, { devicePixelRatio: 1, addEventListener() {}, dispatchEvent: event => events.push(event.detail) });
+  VR.Assets = { getUi: () => null, getSymbolFrame: id => { drawn.push(id); return { width: 64, height: 64 }; }, frameCount: () => 4 };
+  vm.runInContext(source('js/render.js'), scope);
+  VR.Render.init({ parentElement: { clientWidth: 600, clientHeight: 480 }, style: {}, getContext: () => canvasContext });
+  VR.Engine.seed(123);
+  const from = VR.Engine.playSpin({bet:1}).steps[0].grid;
+  const to = VR.Engine.playSpin({bet:1}).steps[0].grid;
+  const before = JSON.stringify({ from, to });
+  let supply;
+  const target = delayed ? new Promise(r => { supply = r; }) : to;
+  const stops = [];
+  let complete = false;
+  const promise = VR.Render.animateSpin(from, target, 2100, { onReelStopped: c => stops.push(c) }).then(() => { complete = true; });
+  while (!complete && clock < 7000) {
+    clock += 1000 / hz;
+    if (supply && clock >= 2500) { supply(to); supply = null; }
+    await Promise.resolve(); await Promise.resolve();
+    const batch = queued; queued = [];
+    batch.forEach(cb => cb(clock));
+  }
+  await promise;
+  assert.equal(JSON.stringify({ from, to }), before, 'renderer must not mutate supplied grids');
+  assert.deepEqual(stops, [0, 1, 2, 3, 4], 'each reel stops once, left to right');
+  assert.deepEqual(drawn, Array.from(to.flat(), cell => cell.id), 'final drawn symbols equal supplied result');
+  assert.equal(events.filter(e => e.name === 'AllReelsStopped').length, 1);
+  assert.ok(clock < (delayed ? 4000 : 2200));
+  let rejected = false;
+  const failure = VR.Render.animateSpin(from, Promise.reject(new Error('network failed'))).catch(() => { rejected = true; });
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+    const batch = queued; queued = []; batch.forEach(cb => cb(clock += 17));
+  }
+  await failure;
+  assert.ok(rejected, 'network error rejects animation');
+  assert.deepEqual(drawn, Array.from(from.flat(), cell => cell.id), 'failure restores previous board');
+  console.log(`OK renderer ${hz} Hz${delayed ? ' / delayed response' : ''}`);
+}
+async function timelineTest(mode, auto = 0) {
+  const { VR, scope } = engine();
+  let handlers, lastDisplayed, lastResolved, reveals = 0, tumbles = 0, paid = 0;
+  VR.Engine.seed(7);
+  const resolve = VR.Engine.playSpin;
+  VR.Engine.playSpin = opts => { const result = resolve(opts); if (handlers) { paid++; lastResolved = result; } return result; };
+  VR.Assets = { init: async () => {} };
+  VR.API = { probe: async () => false };
+  VR.Audio = new Proxy({}, { get: () => () => {} });
+  VR.Render = {
+    init() {}, setRows() {}, clearFlash() {}, clearAnim() {}, setFlash() {},
+    drawFrame(grid) { if (grid) lastDisplayed = grid; },
+    async animateSpin(from, pending) {
+      assert.equal(JSON.stringify(from), JSON.stringify(lastDisplayed), 'spin begins from previous displayed board');
+      lastDisplayed = await pending;
+    },
+    async playWinAnim(grid, positions, duration, wins) {
+      if (wins) {
+        reveals++;
+        for (const p of positions) assert.ok(grid[p.c][p.r], 'winning symbols remain visible during reveal');
+      }
+    },
+    async animateRemove() {},
+    async animateTumble(from, to) {
+      tumbles++;
+      assert.ok(from.flat().some(cell => cell === null), 'cascade starts from exploded grid');
+      assert.notEqual(from, to, 'cascade must not overwrite source before animation');
+      lastDisplayed = to;
+    }
+  };
+  VR.UI = new Proxy({
+    bind(state, bound) { handlers = bound; }, money: n => String(n)
+  }, { get: (obj, key) => obj[key] || (async () => {}) });
+  Object.assign(scope, {
+    document: { body: { classList: { add() {} }, addEventListener() {} }, getElementById() {}, addEventListener() {} },
+    navigator: {}, setInterval() {}, setTimeout(cb, ms) { if (ms < 1000) queueMicrotask(cb); }
+  });
+  vm.runInContext(source('js/app.js'), scope);
+  await VR.App.init();
+  if (auto) handlers.setAuto(auto);
+  else if (mode === 'base') await handlers.spin();
+  else handlers.buy(mode);
+  for (let i = 0; i < 10000 && (VR.App.state.busy || VR.App.state.autoLeft); i++) await Promise.resolve();
+  assert.equal(VR.App.state.busy, false, 'timeline completes');
+  assert.equal(paid, auto || 1, 'autoplay runs exactly requested number');
+  assert.equal(VR.App.state.lastWin, lastResolved.totalWin);
+  assert.equal(JSON.stringify(VR.App.state.grid), JSON.stringify(lastResolved.grid));
+  if (mode !== 'base' || auto) { assert.ok(reveals > 0); assert.ok(tumbles > 0); }
+  console.log(`OK timeline ${mode}, ${paid} spin(s), ${reveals} win reveals / ${tumbles} tumbles`);
+}
+(async () => {
+  for (const hz of [60, 90, 120]) await rendererTest(hz);
+  await rendererTest(60, true);
+  await timelineTest('base', 10);
+  for (const mode of ['bonus', 'bonus_max', 'super']) await timelineTest(mode);
+  const { playSpinWithRng } = require('../server/src/game/engineBridge');
+  let calls = 0;
+  const rng = () => { let n = 123; return { nextFloatSync() { calls++; n = (Math.imul(n, 1664525) + 1013904223) >>> 0; return n / 4294967296; } }; };
+  const nativeRandom = Math.random;
+  const a = playSpinWithRng({ bet: 1 }, rng());
+  const b = playSpinWithRng({ bet: 1 }, rng());
+  assert.ok(calls > 0, 'server consumes supplied RNG');
+  assert.equal(JSON.stringify(a), JSON.stringify(b), 'same external RNG stream gives same result');
+  assert.equal(Math.random, nativeRandom, 'server restores native RNG');
+  assert.throws(() => playSpinWithRng({bet: 1}, {}), /RNG stream/);
+  assert.equal(Math.random, nativeRandom, 'server restores RNG after failure');
+  console.log('OK authoritative RNG stream and error cleanup');
+})().catch(err => { console.error(err); process.exitCode = 1; });
+
+

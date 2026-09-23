@@ -11,17 +11,31 @@
   <title>Vault Run</title>
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/casino.css" />
+  <link rel="stylesheet" href="css/vault-art.css" />
+  <link rel="preload" as="image" href="assets/casino/vault-title-v2.webp" />
 </head>
-<body>
-  <div id="app">
+<body class="is-loading">
+  <section id="loading-screen" class="loading-screen" aria-label="Loading Vault Run">
+    <div class="loading-rays" aria-hidden="true"></div>
+    <div class="loading-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="loading-content">
+      <p class="loading-eyebrow">THE VAULT IS WAITING</p>
+      <h1 class="loading-title"><span class="sr-only">Vault Run — Circuit Breach</span><img src="assets/casino/vault-title-v2.webp" width="1200" height="400" alt="" fetchpriority="high" /></h1>
+      <p class="loading-tagline">One way in. A thousand ways to win.</p>
+      <div class="loading-mechanics" aria-hidden="true"><span>TUMBLE</span><b>◇</b><span>COLLECT</span><b>◇</b><span>CRACK</span></div>
+      <div class="loading-bottom">
+        <div id="load-progress" class="load-progress" role="progressbar" aria-label="Loading game assets" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="load-fill"></div></div>
+        <div class="load-caption"><span id="load-label" role="status">Opening the vault…</span><span id="load-percent">0%</span></div>
+        <button id="enter-vault" class="enter-vault" disabled>PREPARING THE VAULT</button>
+        <small class="loading-footnote">CIRCUIT BREACH <span>•</span> 5 REELS · 1,024 WAYS</small>
+      </div>
+    </div>
+  </section>
+  <div id="app" inert>
     <header class="topbar">
       <button id="btn-menu" class="icon-btn" aria-label="Menu">☰</button>
       <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>VAULT RUN</h1>
-          <p class="tag">CIRCUIT BREACH</p>
-        </div>
+        <img class="game-title" src="assets/casino/vault-title-v2.webp" width="1200" height="400" alt="Vault Run — Circuit Breach" />
       </div>
       <button id="btn-mute" class="icon-btn" aria-label="Mute">🔊</button>
     </header>
@@ -34,7 +48,9 @@
     <main class="stage">
       <div class="stage-heading"><span>✦ CIRCUIT BREACH ✦</span><strong>TUMBLE · COLLECT · CRACK</strong><span>✦ UP TO 20,000× ✦</span></div>
       <div class="reel-frame">
-        <canvas id="reels" width="720" height="360"></canvas>
+        <div class="reel-window"><canvas id="reels" width="720" height="360" aria-label="Game reels"></canvas></div>
+        <img class="vault-surround" src="assets/casino/vault-frame-v2.webp" alt="" aria-hidden="true" />
+        <span class="vault-light vault-light-left" aria-hidden="true"></span><span class="vault-light vault-light-right" aria-hidden="true"></span>
       </div>
       <p id="status-line" class="status-line">Loading…</p>
     </main>
@@ -158,6 +174,7 @@
 
   <div id="toast" class="toast" role="status"></div>
 
+  <script src="js/loading.js"></script>
   <script src="js/config.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/assets.js"></script>

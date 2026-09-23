@@ -1,10 +1,14 @@
 /* Vault Run service worker — offline shell for PWA / store WebView */
-const CACHE = "vaultrun-v1.3-casino";
+const CACHE = "vaultrun-v1.5.1-vault-art";
 const ASSETS = [
   "./",
   "./index.html",
   "./css/main.css",
   "./css/casino.css",
+  "./css/vault-art.css",
+  "./js/loading.js",
+  "./assets/casino/vault-title-v2.webp",
+  "./assets/casino/vault-frame-v2.webp",
   "./js/config.js",
   "./js/engine.js",
   "./js/assets.js",
@@ -26,13 +30,14 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k.startsWith("vaultrun-") && k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   event.respondWith(
     caches.match(event.request).then((hit) => hit || fetch(event.request).then((res) => {
       const copy = res.clone();

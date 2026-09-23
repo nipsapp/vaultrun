@@ -77,6 +77,8 @@ VR.UI = (function () {
 
     const spinBtn = $("#btn-spin");
     spinBtn.classList.toggle("busy", state.busy);
+    spinBtn.disabled = state.busy;
+    spinBtn.setAttribute("aria-busy", String(state.busy));
     spinBtn.classList.toggle("bonus", state.inBonus);
     $("#btn-auto").classList.toggle("active", state.autoLeft > 0);
     $("#auto-left").textContent = state.autoLeft > 0 ? state.autoLeft : "";

@@ -11,6 +11,11 @@ VR.Render = (function () {
   let animCells = new Map(); // "c,r" -> { id, start }
   let boardRows = 3;
   let animTick = 0;
+  let winGroups = [];
+  let revealStart = 0;
+  const emit = (name, detail = {}) => window.dispatchEvent(new CustomEvent('vr:animation', {
+    detail: { name, timestamp: performance.now(), ...detail }
+  }));
 
   function init(el) {
     canvas = el;
@@ -165,14 +170,14 @@ VR.Render = (function () {
       ctx.stroke();
     }
 
-    if (id === "WILD" && extra && extra.mult) {
+    if ((id === "WILD" && extra && extra.mult) || (id === "CHIP" && extra && extra.chip != null)) {
       ctx.font = `900 ${Math.floor(s * 0.22)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = 3;
       ctx.strokeStyle = "#000";
       ctx.fillStyle = "#fde68a";
-      const t = extra.mult + "×";
+      const t = (id === "CHIP" ? extra.chip : extra.mult) + "×";
       ctx.strokeText(t, x + w / 2, y + h * 0.78);
       ctx.fillText(t, x + w / 2, y + h * 0.78);
     }
@@ -188,6 +193,7 @@ VR.Render = (function () {
 
   function clearFlash() {
     flashCells = new Set();
+    winGroups = [];
   }
 
   function animateCells(positions, idHint) {
@@ -247,106 +253,229 @@ VR.Render = (function () {
           ctx.fill();
         }
         const extra = Object.assign({}, cell, { _key: key });
+        ctx.save();
+        if (flashCells.size && !flashCells.has(key)) ctx.globalAlpha = 0.32;
+        if (animCells.has(key)) {
+          const pulse = 1 + 0.045 * Math.sin((performance.now() - revealStart) / 150);
+          ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+          ctx.scale(pulse, pulse);
+          ctx.translate(-rect.x - rect.w / 2, -rect.y - rect.h / 2);
+        }
         drawSymbol(cell.id, rect.x, rect.y + yOff, rect.w, rect.h, extra);
+        ctx.restore();
       }
     }
   }
 
-  /**
-   * Professional reel spin: staggered L→R stops, ease-out settle, soft bounce.
-   * @param {object} fromGrid
-   * @param {object} toGrid
-   * @param {number} duration total ms until last reel settles (default ~2000)
-   * @param {{ respin?: boolean }} opts
-   */
-  async function animateSpin(fromGrid, toGrid, duration, opts) {
-    opts = opts || {};
-    const cols = VR.CONFIG.reels;
-    const isRespin = !!opts.respin;
-    const total = duration || (isRespin ? 1100 : 2000);
-    const stagger = isRespin ? 0.07 : 0.11; // portion of timeline between reel starts
-    const spinPortion = isRespin ? 0.55 : 0.62; // how long each reel stays blurred
-    const start = performance.now();
-    const offsets = new Array(cols).fill(0);
-    const blurGrid = fromGrid || toGrid;
-
-    return new Promise((resolve) => {
+  // The strip is presentation only. No RNG calls or result mutation occur here.
+  // Time-based displacement keeps the same travel at 60, 90 and 120 Hz.
+  async function animateSpin(fromGrid, suppliedGrid, duration = 2100, opts = {}) {
+    clearFlash();
+    clearAnim();
+    const cols = fromGrid.length;
+    const rows = VR.Engine.rowsOf(fromGrid);
+    setRows(rows);
+    const started = performance.now();
+    const ids = Object.keys(VR.CONFIG.baseWeights).map(id => ({ id }));
+    const speed = 0.018;
+    const accel = 130, settle = 150;
+    const stagger = Math.min(150, duration * 0.075);
+    const brake = Math.min(430, duration * 0.3);
+    let target = null, failure = null, arrived = 0;
+    Promise.resolve(suppliedGrid).then(grid => {
+      if (!Array.isArray(grid) || grid.length !== cols || grid.some(col =>
+        !Array.isArray(col) || col.length !== rows || col.some(cell => !cell || !cell.id))) {
+        throw new Error('Invalid reel result');
+      }
+      target = grid;
+      arrived = performance.now() - started;
+    }).catch(err => { failure = err; });
+    const reels = Array.from({ length: cols }, (_, c) => ({
+      delay: c * 38, brakeAt: null, end: 0, distance: 0, full: false, stopped: false, begun: false, braking: false
+    }));
+    const travel = t => t <= 0 ? 0 : t < accel
+      ? speed * accel * Math.pow(t / accel, 3) / 3 - 0.075 * Math.sin(Math.PI * t / accel)
+      : speed * (t - accel + accel / 3);
+    emit('SpinStarted');
+    return new Promise((resolve, reject) => {
       function frame(now) {
-        const t = Math.min(1, (now - start) / total);
-        const show = VR.Engine.cloneGrid(toGrid);
-        const ids = Object.keys(VR.CONFIG.baseWeights);
-
-        for (let c = 0; c < cols; c++) {
-          const reelStart = c * stagger * 0.85;
-          const spinLen = 0.58 + c * 0.04;
-          const reelEnd = Math.min(0.98, reelStart + spinLen);
-          const localSpan = Math.max(0.001, reelEnd - reelStart);
-          let localT = (t - reelStart) / localSpan;
-          localT = Math.min(1, Math.max(0, localT));
-
-          // Not started yet — hold previous symbols
-          if (t < reelStart) {
-            offsets[c] = 0;
-            for (let r = 0; r < VR.Engine.rowsOf(show); r++) {
-              const prev = blurGrid[c] && blurGrid[c][r];
-              show[c][r] = prev ? Object.assign({}, prev) : show[c][r];
-            }
-            continue;
+        if (failure) { drawFrame(fromGrid); reject(failure); return; }
+        const elapsed = now - started;
+        drawFrame(null);
+        let done = true;
+        reels.forEach((reel, c) => {
+          const local = elapsed - reel.delay;
+          if (local >= 0 && !reel.begun) { reel.begun = true; emit('ReelStarted', { reel: c }); }
+          if (local >= accel && !reel.full) { reel.full = true; emit('ReelFullSpeed', { reel: c }); }
+          if (target && reel.brakeAt === null) {
+            reel.brakeAt = Math.max(duration - settle - brake - (cols - 1 - c) * stagger,
+              arrived + 30 + c * stagger, reel.delay + accel);
+            reel.distance = travel(reel.brakeAt - reel.delay);
+            reel.end = Math.ceil(reel.distance + speed * brake / 3);
           }
-
-          const land = 1 - Math.pow(1 - localT, 3);
-
-          if (localT < 0.82) {
-            const speed = isRespin ? 12 : 20;
-            offsets[c] = (1 - land) * speed * Math.sin(now / 24 + c * 1.7);
-            for (let r = 0; r < VR.Engine.rowsOf(show); r++) {
-              if (toGrid[c][r] && toGrid[c][r].id === "BLOCK") {
-                show[c][r] = Object.assign({}, toGrid[c][r]);
-                continue;
+          let position = travel(local), velocity = local < accel ? speed * Math.pow(Math.max(0, local) / accel, 2) : speed;
+          let impact = 0;
+          if (reel.brakeAt !== null && elapsed >= reel.brakeAt) {
+            if (!reel.braking) { reel.braking = true; emit('ReelDecelerationStarted', { reel: c }); }
+            const u = Math.min(1, (elapsed - reel.brakeAt) / brake);
+            // Cubic Hermite: continuous velocity at entry, zero velocity at target.
+            const delta = reel.end - reel.distance;
+            position = reel.distance + delta * (3*u*u - 2*u*u*u) + speed * brake * (u*u*u - 2*u*u + u);
+            velocity = (delta * (6*u - 6*u*u) + speed * brake * (3*u*u - 4*u + 1)) / brake;
+            if (u === 1) {
+              const v = Math.min(1, (elapsed - reel.brakeAt - brake) / settle);
+              impact = Math.sin(v * Math.PI * 2) * Math.exp(-v * 4);
+              position = reel.end + 0.055 * impact;
+              if (v === 1 && !reel.stopped) {
+                reel.stopped = true;
+                emit('ReelStopped', { reel: c });
+                if (opts.onReelStopped) opts.onReelStopped(c);
               }
-              if (isRespin && blurGrid[c] && blurGrid[c][r] && blurGrid[c][r].locked) {
-                show[c][r] = Object.assign({}, blurGrid[c][r]);
-                continue;
-              }
-              if (toGrid[c][r] && toGrid[c][r].locked && localT > 0.45) {
-                show[c][r] = Object.assign({}, toGrid[c][r]);
-                continue;
-              }
-              show[c][r] = { id: ids[(Math.random() * ids.length) | 0] };
-            }
-          } else {
-            const bounceT = (localT - 0.82) / 0.18;
-            const bounce = Math.sin(bounceT * Math.PI) * (isRespin ? 3.5 : 6.5) * (1 - bounceT);
-            offsets[c] = bounce;
-            for (let r = 0; r < VR.Engine.rowsOf(show); r++) {
-              show[c][r] = toGrid[c][r] ? Object.assign({}, toGrid[c][r]) : null;
             }
           }
-        }
-
-        drawFrame(show, offsets);
-        if (t < 1) requestAnimationFrame(frame);
-        else {
-          drawFrame(toGrid, null);
-          resolve();
-        }
+          if (!reel.stopped) done = false;
+          const floor = Math.floor(position);
+          ctx.save();
+          const rect = cellRect(c, 0);
+          ctx.beginPath();
+          ctx.rect(rect.x, pad, cellW, rows * (cellH + pad) - pad);
+          ctx.clip();
+          for (let row = -1; row <= rows; row++) {
+            const index = row - floor;
+            let cell;
+            if (target && index >= -reel.end && index < -reel.end + rows) cell = target[c][index + reel.end];
+            else if (index >= 0 && index < rows) cell = fromGrid[c][index];
+            else cell = ids[((index * 7 + c * 3) % ids.length + ids.length) % ids.length];
+            if (!cell) continue;
+            const y = pad + (row + position - floor) * (cellH + pad);
+            // Directional trails use the same sprite: no costly per-frame blur filters.
+            const blur = Math.min(1, Math.max(0, velocity / speed));
+            if (blur > 0.15) {
+              ctx.globalAlpha = 0.12 * blur;
+              drawSymbol(cell.id, rect.x, y - blur * cellH * 0.16, cellW, cellH, cell);
+              drawSymbol(cell.id, rect.x, y + blur * cellH * 0.16, cellW, cellH, cell);
+            }
+            ctx.globalAlpha = 1 - 0.15 * blur;
+            drawSymbol(cell.id, rect.x, y, cellW, cellH * (1 - 0.025 * impact), cell);
+          }
+          ctx.restore();
+        });
+        if (!done) requestAnimationFrame(frame);
+        else { drawFrame(target); emit('AllReelsStopped'); resolve(); }
       }
       requestAnimationFrame(frame);
     });
   }
 
-  function scramble() {
-    /* legacy unused — spin handles scramble inline */
+  // Server tumble grids contain holes. Survivors retain their exact order and
+  // fall to the bottom; new supplied symbols enter above the clipped viewport.
+  async function animateTumble(fromGrid, toGrid, duration = 570) {
+    clearFlash();
+    const rows = VR.Engine.rowsOf(toGrid);
+    const starts = fromGrid.map(col => {
+      const survivors = col.map((cell, r) => cell ? r : -1).filter(r => r >= 0);
+      const missing = rows - survivors.length;
+      return Array.from({ length: rows }, (_, r) => r < missing ? r - missing : survivors[r - missing]);
+    });
+    const start = performance.now();
+    return new Promise(resolve => {
+      function frame(now) {
+        drawFrame(null);
+        toGrid.forEach((col, c) => {
+          ctx.save();
+          const rect = cellRect(c, 0);
+          ctx.beginPath(); ctx.rect(rect.x, pad, cellW, rows * (cellH + pad) - pad); ctx.clip();
+          col.forEach((cell, r) => {
+            const t = Math.max(0, Math.min(1, (now - start - c * 22) / (duration - 100)));
+            const fall = 1 - Math.pow(1 - t, 3);
+            const y = pad + (starts[c][r] + (r - starts[c][r]) * fall) * (cellH + pad);
+            if (cell) drawSymbol(cell.id, rect.x, y, cellW, cellH, cell);
+          });
+          ctx.restore();
+        });
+        if (now - start < duration) requestAnimationFrame(frame);
+        else { drawFrame(toGrid); resolve(); }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function drawWinConnections(now) {
+    const colors = ['#ffe49a', '#6ee7ff', '#e6acff'];
+    // Ways have multiple hits on a reel, not fixed paylines. Connect every
+    // participating cell only between adjacent reels of the same supplied win.
+    winGroups.forEach((win, wi) => {
+      const color = colors[wi % colors.length];
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.shadowColor = color; ctx.shadowBlur = 12;
+      ctx.globalAlpha = 0.6 + 0.3 * Math.sin((now - revealStart) / 180);
+      const positions = win.positions || [];
+      for (const a of positions) for (const b of positions) {
+        if (b.c !== a.c + 1) continue;
+        const ra = cellRect(a.c, a.r), rb = cellRect(b.c, b.r);
+        ctx.beginPath(); ctx.moveTo(ra.x + ra.w / 2, ra.y + ra.h / 2);
+        ctx.lineTo(rb.x + rb.w / 2, rb.y + rb.h / 2); ctx.stroke();
+      }
+      ctx.restore();
+    });
+    for (const key of flashCells) {
+      const [c, r] = key.split(',').map(Number), rect = cellRect(c, r);
+      ctx.save();
+      ctx.strokeStyle = '#ffdf89'; ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#ffbf47'; ctx.shadowBlur = 16;
+      roundRect(rect.x + 2, rect.y + 2, rect.w - 4, rect.h - 4, 10); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  async function animateRemove(grid, positions, duration = 220) {
+    const keys = new Set(positions.map(p => p.c + ',' + p.r));
+    const start = performance.now();
+    return new Promise(resolve => {
+      function frame(now) {
+        const t = Math.min(1, (now - start) / duration);
+        drawFrame(null);
+        grid.forEach((col, c) => col.forEach((cell, r) => {
+          if (!cell) return;
+          const rect = cellRect(c, r), removed = keys.has(c + ',' + r);
+          ctx.save();
+          if (removed) {
+            ctx.globalAlpha = 1 - t;
+            ctx.translate(rect.x + cellW / 2, rect.y + cellH / 2);
+            ctx.scale(1 + t * 0.18, 1 + t * 0.18);
+            ctx.translate(-rect.x - cellW / 2, -rect.y - cellH / 2);
+          }
+          drawSymbol(cell.id, rect.x, rect.y, cellW, cellH, cell);
+          ctx.restore();
+          if (removed) {
+            ctx.save(); ctx.fillStyle = '#ffe6a0'; ctx.globalAlpha = 1 - t;
+            for (let i = 0; i < 8; i++) {
+              const a = i * Math.PI / 4;
+              const d = t * Math.min(cellW, cellH) * 0.65;
+              ctx.fillRect(rect.x + cellW / 2 + Math.cos(a) * d, rect.y + cellH / 2 + Math.sin(a) * d, 3, 3);
+            }
+            ctx.restore();
+          }
+        }));
+        if (t < 1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
   }
 
   /** Symbol win / lock frame animation — slower, readable */
-  async function playWinAnim(grid, positions, duration) {
+  async function playWinAnim(grid, positions, duration, wins = []) {
+    winGroups = wins;
+    revealStart = performance.now();
+    emit('WinRevealStarted');
     animateCells(positions);
     const start = performance.now();
     const ms = duration || 900;
     return new Promise((resolve) => {
       function frame(now) {
         drawFrame(grid);
+        drawWinConnections(now);
         if (now - start < ms) requestAnimationFrame(frame);
         else {
           clearAnim();
@@ -364,6 +493,8 @@ VR.Render = (function () {
     setRows,
     drawFrame,
     animateSpin,
+    animateTumble,
+    animateRemove,
     playWinAnim,
     setFlash,
     setGold,

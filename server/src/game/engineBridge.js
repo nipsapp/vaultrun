@@ -37,15 +37,16 @@ const VR = loadEngine();
 function playSpinWithRng(opts, roundRng) {
   const prev = Math.random;
   // Engine.seed() without args binds rng to Math.random reference
-  VR.Engine.seed();
   Math.random = () => {
     if (typeof roundRng.nextFloatSync === "function") return roundRng.nextFloatSync();
     throw new Error("RNG stream missing nextFloatSync");
   };
   try {
+    VR.Engine.seed();
     return VR.Engine.playSpin(opts || {});
   } finally {
     Math.random = prev;
+    VR.Engine.seed();
   }
 }
 

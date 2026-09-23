@@ -9,18 +9,26 @@ VR.Assets = (function () {
   function loadImage(path) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
+      const timer = setTimeout(() => resolve(null), 12000);
+      img.onload = () => { clearTimeout(timer); resolve(img); };
+      img.onerror = () => { clearTimeout(timer); resolve(null); };
       img.src = BASE + path;
     });
   }
 
-  async function init() {
-    const response = await fetch(BASE + "manifest.json");
+  async function init(onProgress = () => {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    let response;
+    try { response = await fetch(BASE + "manifest.json", { signal: controller.signal }); }
+    finally { clearTimeout(timeout); }
     if (!response.ok) throw new Error("Symbol manifest unavailable");
     const manifest = await response.json();
+    const total = Object.values(manifest.symbols).reduce((n, paths) => n + paths.length, 0);
+    let loaded = 0;
+    onProgress(0);
     await Promise.all(Object.entries(manifest.symbols).map(async ([id, paths]) => {
-      symbolFrames[id] = await Promise.all(paths.map(loadImage));
+      symbolFrames[id] = await Promise.all(paths.map(async path => { const image = await loadImage(path); onProgress(++loaded / Math.max(1, total)); return image; }));
     }));
     ready = true;
   }
@@ -38,7 +46,7 @@ VR.Assets = (function () {
     getSymbolFrame,
     getUi: () => null,
     isReady: () => ready,
-    frameCount: (id) => (symbolFrames[id] || []).length,
+    frameCount: (id) => (symbolFrames[(VR.CONFIG.artAlias || {})[id] || id] || []).length,
     BASE
   };
 })();

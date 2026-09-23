@@ -38,8 +38,18 @@ VR.API = (function () {
 
   async function probe() {
     try {
-      const res = await fetch(base + "/health", { method: "GET" });
-      online = res.ok;
+      const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const t = ctrl ? setTimeout(() => ctrl.abort(), 1200) : null;
+      const res = await fetch(base + "/health", {
+        method: "GET",
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      const cfg = res.ok ? await fetch(base + "/game/config", {
+        signal: ctrl ? ctrl.signal : undefined, cache: "no-store"
+      }).then(r => r.ok ? r.json() : null) : null;
+      if (t) clearTimeout(t);
+      online = !!(cfg && cfg.mathId === VR.CONFIG.mathId && cfg.version === VR.CONFIG.version &&
+        cfg.reels === VR.CONFIG.reels && cfg.rowsBase === VR.CONFIG.rowsBase);
       return online;
     } catch {
       online = false;
@@ -50,8 +60,15 @@ VR.API = (function () {
   async function ensureAuth() {
     if (token) {
       try {
-        await req("GET", "/auth/me");
-        return true;
+        const me = await req("GET", "/auth/me");
+        let balance = me.balance;
+        if (balance == null) {
+          try {
+            const w = await req("GET", "/wallet");
+            balance = w.balance;
+          } catch (_) {}
+        }
+        return { token, user: me.user || me, balance };
       } catch {
         token = "";
         localStorage.removeItem("vr_token");
