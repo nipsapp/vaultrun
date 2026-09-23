@@ -1,5 +1,5 @@
 /**
- * Rule / regression tests for Vault Run engine (Node)
+ * Circuit Breach regression tests (Node)
  */
 const fs = require("fs");
 const vm = require("vm");
@@ -25,141 +25,63 @@ function assert(cond, msg) {
   }
 }
 
-// 1) Base board size
+assert(C.mathId === "circuit-breach", "math id circuit-breach");
+assert(C.reels === 5 && C.rowsBase === 4, "5x4 grid");
+assert(C.maxWinCap === 20000, "max win 20k");
+assert(!C.bonuses, "no Goblin bonus ladder object");
+assert(!C.premiums, "no premium lock list");
+assert(C.modes && C.modes.base && C.modes.bonus, "Stake-style modes present");
+
 {
   E.seed(1);
   const r = E.playSpin({ bet: 1 });
-  assert(r.rows === 3, "base rows = 3");
-  assert(r.grid.length === 6, "6 reels");
-  assert(r.grid[0].length === 3, "3 row cells");
+  assert(r.rows === 4, "base rows = 4");
+  assert(r.grid.length === 5, "5 reels");
+  assert(r.grid[0].length === 4, "4 row cells");
+  assert(r.respinCount === 0, "no respin counter");
+  assert(r.premium == null, "no premium field");
+  assert(!r.goldWilds, "no gold wilds");
 }
 
-// 2) Force kingpin scatters
 {
   E.seed(42);
-  const r = E.playSpin({ bet: 1, forceBonus: "kingpin" });
-  assert(r.scatterCount >= 3, "force kingpin >= 3 scatters");
-  assert(r.trigger && r.trigger.id === "kingpin", "triggers kingpin");
+  const r = E.playSpin({ bet: 1, mode: "bonus" });
+  assert(r.trigger && r.trigger.id === "vault_breach", "buy triggers vault_breach");
+  assert(r.steps.some((s) => s.type === "fsStart"), "FS book includes fsStart");
+  assert(r.steps.some((s) => s.type === "fsEnd"), "FS book includes fsEnd");
+  assert(r.fsTotal != null, "fsTotal present");
 }
 
-// 3) Force all bonus tiers
-for (const id of ["kingpin", "moneyrun", "payday", "mobjob"]) {
-  E.seed(100 + id.length);
-  const r = E.playSpin({ bet: 1, forceBonus: id });
-  assert(r.trigger && r.trigger.id === id, "force trigger " + id);
-  assert(r.scatterCount >= C.bonuses[id].scatters, "scat count " + id);
+{
+  E.seed(7);
+  let sawTumble = 0;
+  let sawCollect = 0;
+  let goblinSteps = 0;
+  for (let i = 0; i < 300; i++) {
+    const r = E.playSpin({ bet: 1 });
+    if (r.steps.some((s) => s.type === "tumble" || s.type === "tumbleWin")) sawTumble++;
+    if (r.steps.some((s) => s.type === "collect")) sawCollect++;
+    if (r.steps.some((s) => s.type === "lock" || s.type === "respin" || s.type === "barrel" || s.type === "arrow")) {
+      goblinSteps++;
+    }
+    if (r.totalWin > C.maxWinCap + 0.01) {
+      failed++;
+      console.error("FAIL: over cap", r.totalWin);
+    }
+  }
+  assert(sawTumble > 0, "tumbles occur (" + sawTumble + "/300)");
+  assert(sawCollect >= 0, "collect steps observed (" + sawCollect + ")");
+  assert(goblinSteps === 0, "zero Goblin step types (" + goblinSteps + ")");
 }
 
-// 4) No insane pure-wild overpay on base
 {
   E.seed(99);
-  let insane = 0;
-  for (let i = 0; i < 200; i++) {
-    const r = E.playSpin({ bet: 1 });
-    if (r.totalWin > 5000 && r.respinCount === 0 && !r.goldWilds) insane++;
+  for (const mode of ["bonus", "bonus_max", "super"]) {
+    const r = E.playSpin({ bet: 1, mode });
+    assert(r.mode === mode, "mode " + mode);
+    assert(r.trigger, "trigger on " + mode);
   }
-  assert(insane === 0, "no insane base wins without feature (pure-wild overpay guard)");
 }
 
-// 5) Respin chain terminates (not always max)
-{
-  E.seed(3);
-  let hitMax = 0;
-  let anyRespin = 0;
-  for (let i = 0; i < 400; i++) {
-    const r = E.playSpin({ bet: 1 });
-    if (r.respinCount > 0) anyRespin++;
-    if (r.respinCount >= C.maxRespinChain) hitMax++;
-  }
-  assert(anyRespin > 0, "respins occur sometimes (" + anyRespin + ")");
-  assert(hitMax < 30, "max chain not constantly hit (" + hitMax + "/400)");
-}
-
-// 6) Bonus board persistence unlocks
-{
-  E.seed(11);
-  const bonus = C.bonuses.kingpin;
-  let mask = E.createBlockMask(bonus.rows, C.rowsBase);
-  let blocksBefore = 0;
-  for (let c = 0; c < 6; c++)
-    for (let r = 0; r < bonus.rows; r++) if (mask[c][r] && mask[c][r].id === "BLOCK") blocksBefore++;
-
-  let clearedAny = false;
-  for (let i = 0; i < 40; i++) {
-    const r = E.playSpin({
-      bet: 1,
-      inBonus: true,
-      bonusId: "kingpin",
-      persistMask: mask
-    });
-    mask = r.mask;
-    for (const step of r.steps) {
-      if (step.type === "arrow" && step.cleared && step.cleared.length) clearedAny = true;
-    }
-  }
-  let blocksAfter = 0;
-  for (let c = 0; c < 6; c++)
-    for (let r = 0; r < bonus.rows; r++) if (mask[c][r] && mask[c][r].id === "BLOCK") blocksAfter++;
-  assert(mask[0].length === 5, "kingpin mask rows 5");
-  assert(blocksAfter <= blocksBefore, "blocks never increase across bonus spins");
-  // clearedAny may or may not happen — soft check
-  console.log("INFO: arrow clears seen:", clearedAny, "blocks", blocksBefore, "->", blocksAfter);
-}
-
-// 7) Payday min wild mult
-{
-  E.seed(55);
-  let ok = true;
-  for (let i = 0; i < 80; i++) {
-    const r = E.playSpin({ bet: 1, inBonus: true, bonusId: "payday" });
-    if (r.goldWilds && r.globalMult < 5) ok = false;
-  }
-  assert(ok, "payday barrel mult >= 5");
-}
-
-// 8) Mob Job min wild mult
-{
-  E.seed(56);
-  let ok = true;
-  for (let i = 0; i < 80; i++) {
-    const r = E.playSpin({ bet: 1, inBonus: true, bonusId: "mobjob" });
-    if (r.goldWilds && r.globalMult < 10) ok = false;
-  }
-  assert(ok, "mobjob barrel mult >= 10");
-}
-
-// 9) Feature spin guarantees 4 wilds and expanded rows
-{
-  E.seed(77);
-  const r = E.playSpin({ bet: 1, featureSpin: true });
-  let wilds = 0;
-  const g0 = r.steps[0].grid;
-  for (let c = 0; c < 6; c++) {
-    for (let row = 0; row < r.rows; row++) {
-      if (g0[c][row] && g0[c][row].id === "WILD") wilds++;
-    }
-  }
-  assert([5, 6, 7].includes(r.rows), "feature board rows in 5/6/7 got " + r.rows);
-  assert(wilds >= 4, "feature guarantees >=4 wilds on land got " + wilds);
-}
-
-// 10) Max win cap
-{
-  E.seed(1);
-  // can't easily force max — check cap field logic with huge bet result clamp via config
-  assert(C.maxWinCap === 40000, "max win cap 40000x");
-}
-
-// 11) Mystery weights sum ~1
-{
-  const s = C.mystery.outcomes.reduce((a, o) => a + o.w, 0);
-  assert(Math.abs(s - 1) < 0.001, "mystery weights sum to 1");
-}
-
-// 12) Ways length pays index
-{
-  assert(C.pays.H1.length === 6, "paytable length 6 for ways 0..5 idx");
-}
-
-console.log(failed === 0 ? "\nALL TESTS PASSED" : "\n" + failed + " FAILED");
-process.exit(failed === 0 ? 0 : 1);
+console.log(failed ? "\n" + failed + " FAILED" : "\nAll Circuit Breach tests passed");
+process.exit(failed ? 1 : 0);

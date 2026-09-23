@@ -1,18 +1,22 @@
 /**
- * Vault Run engine — Goblin Rush–accurate lock / respin / barrel wild
- * RGS_HOOK: swap playSpin for remote resolve before certification
+ * Vault Run engine — Circuit Breach (original tumble + collect + FS)
+ * RGS_HOOK: serialize playSpin → Stake book events for certification
  */
 window.VR = window.VR || {};
 
 VR.Engine = (function () {
-  const C = () => VR.CONFIG;
   let rng = Math.random;
+
+  function C() {
+    return VR.CONFIG;
+  }
 
   function mulberry32(a) {
     return function () {
-      let t = (a += 0x6d2b79f5);
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
@@ -23,32 +27,32 @@ VR.Engine = (function () {
 
   function pickWeighted(map) {
     let total = 0;
-    const entries = Object.entries(map);
-    for (const [, w] of entries) total += w;
-    if (total <= 0) return entries[0][0];
+    for (const k in map) total += map[k];
     let r = rng() * total;
-    for (const [k, w] of entries) {
-      r -= w;
+    for (const k in map) {
+      r -= map[k];
       if (r <= 0) return k;
     }
-    return entries[entries.length - 1][0];
+    return Object.keys(map)[0];
   }
 
-  function pickWildMult(minMult) {
-    const vals = C().wildMults;
-    const weights = C().wildMultWeights.slice();
-    for (let i = 0; i < vals.length; i++) {
-      if (vals[i] < (minMult || 2)) weights[i] = 0;
-    }
+  function pickFromLists(vals, weights) {
     let total = 0;
-    for (const w of weights) total += w;
-    if (total <= 0) return minMult || 2;
+    for (let i = 0; i < weights.length; i++) total += weights[i];
     let r = rng() * total;
-    for (let i = 0; i < vals.length; i++) {
+    for (let i = 0; i < weights.length; i++) {
       r -= weights[i];
       if (r <= 0) return vals[i];
     }
-    return vals[vals.length - 1];
+    return vals[0];
+  }
+
+  function money(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  function cloneGrid(grid) {
+    return grid.map((col) => col.map((cell) => (cell ? { ...cell } : null)));
   }
 
   function emptyGrid(rows) {
@@ -60,584 +64,509 @@ VR.Engine = (function () {
     return g;
   }
 
-  function cloneGrid(g) {
-    if (!g) return null;
-    return g.map((col) => col.map((cell) => (cell ? Object.assign({}, cell) : null)));
+  function makeCell(id, extra) {
+    const cell = { id };
+    if (extra) Object.assign(cell, extra);
+    return cell;
   }
 
-  function rowsOf(grid) {
-    return grid && grid[0] ? grid[0].length : C().rowsBase;
-  }
-
-  function createBlockMask(rows, unlockedRows) {
-    const mask = emptyGrid(rows); // null = playable, BLOCK cell template
-    const playFrom = Math.max(0, rows - unlockedRows);
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rows; r++) {
-        if (r < playFrom) {
-          mask[c][r] = { id: "BLOCK", arrow: rng() < 0.5 ? "H" : "V" };
-        }
+  function makeChip(chipBias) {
+    let vals = C().chipValues.slice();
+    let w = C().chipWeights.slice();
+    if (chipBias > 0) {
+      for (let i = 0; i < w.length; i++) {
+        w[i] = w[i] * (1 + chipBias * (i / (w.length - 1)));
       }
     }
-    return mask;
+    return makeCell("CHIP", { chip: pickFromLists(vals, w) });
   }
 
-  function cloneMask(mask) {
-    return cloneGrid(mask);
+  function makeWild() {
+    return makeCell("WILD", {
+      mult: pickFromLists(C().wildMults, C().wildMultWeights)
+    });
   }
 
-  function isBlocked(mask, c, r) {
-    return !!(mask && mask[c] && mask[c][r] && mask[c][r].id === "BLOCK");
+  function fillCell(weights, chipBias) {
+    const id = pickWeighted(weights);
+    if (id === "CHIP") return makeChip(chipBias || 0);
+    if (id === "WILD") return makeWild();
+    return makeCell(id);
   }
 
-  function fillBoard(weights, rows, mask, opts) {
-    opts = opts || {};
+  function fillBoard(weights, rows, chipBias) {
     const g = emptyGrid(rows);
     for (let c = 0; c < C().reels; c++) {
       for (let r = 0; r < rows; r++) {
-        if (isBlocked(mask, c, r)) {
-          g[c][r] = Object.assign({}, mask[c][r]);
-        } else {
-          g[c][r] = { id: pickWeighted(weights) };
-        }
+        g[c][r] = fillCell(weights, chipBias);
       }
-    }
-    if (opts.guaranteeWilds) {
-      placeGuaranteedWilds(g, mask, opts.guaranteeWilds);
     }
     return g;
   }
 
-  function placeGuaranteedWilds(grid, mask, n) {
-    const spots = [];
+  function forceScatters(grid, n) {
+    const rows = grid[0].length;
+    const slots = [];
     for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
-        if (isBlocked(mask, c, r)) continue;
-        if (grid[c][r] && grid[c][r].id !== "SCAT") spots.push({ c, r });
-      }
+      for (let r = 0; r < rows; r++) slots.push({ c, r });
     }
-    shuffle(spots);
-    for (let i = 0; i < Math.min(n, spots.length); i++) {
-      grid[spots[i].c][spots[i].r] = { id: "WILD" };
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = (rng() * (i + 1)) | 0;
+      const t = slots[i];
+      slots[i] = slots[j];
+      slots[j] = t;
+    }
+    for (let i = 0; i < Math.min(n, slots.length); i++) {
+      const { c, r } = slots[i];
+      grid[c][r] = makeCell("SCAT");
     }
   }
 
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const t = arr[i];
-      arr[i] = arr[j];
-      arr[j] = t;
-    }
-    return arr;
-  }
-
-  function forceScatters(grid, mask, minCount) {
-    let n = countScatters(grid).n;
-    const spots = [];
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
-        if (isBlocked(mask, c, r)) continue;
-        if (grid[c][r] && grid[c][r].id !== "BLOCK") spots.push({ c, r });
-      }
-    }
-    shuffle(spots);
-    let i = 0;
-    while (n < minCount && i < spots.length) {
-      const p = spots[i++];
-      if (grid[p.c][p.r].id === "SCAT") continue;
-      grid[p.c][p.r] = { id: "SCAT" };
-      n++;
-    }
-    return grid;
-  }
-
-  function stripScatters(grid) {
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
-        if (grid[c][r] && grid[c][r].id === "SCAT") {
-          grid[c][r] = { id: pickWeighted({ L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 }) };
-        }
-      }
-    }
-    return grid;
-  }
-
-  function countScatters(grid) {
+  function countScat(grid) {
     let n = 0;
-    const positions = [];
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
+    const pos = [];
+    for (let c = 0; c < grid.length; c++) {
+      for (let r = 0; r < grid[c].length; r++) {
         if (grid[c][r] && grid[c][r].id === "SCAT") {
           n++;
-          positions.push({ c, r });
+          pos.push({ c, r });
         }
       }
     }
-    return { n, positions };
+    return { n, pos };
   }
 
-  function reelHasExact(grid, col, sym) {
-    for (let r = 0; r < rowsOf(grid); r++) {
-      const cell = grid[col][r];
-      if (cell && cell.id === sym) return true;
-    }
-    return false;
-  }
-
-  function reelHasSymOrWild(grid, col, sym) {
-    for (let r = 0; r < rowsOf(grid); r++) {
-      const cell = grid[col][r];
-      if (!cell || cell.id === "BLOCK") continue;
-      if (cell.id === sym || cell.id === "WILD") return true;
-    }
-    return false;
-  }
-
-  function countSymOrWildOnReel(grid, col, sym) {
-    let n = 0;
-    for (let r = 0; r < rowsOf(grid); r++) {
-      const cell = grid[col][r];
-      if (!cell || cell.id === "BLOCK") continue;
-      if (cell.id === sym || cell.id === "WILD") n++;
-    }
-    return n;
-  }
-
-  /** Premium must appear for real on reels 1–3 zone; wilds may fill gaps. */
-  function detectPremiumTrigger(grid) {
-    for (const sym of C().premiums) {
-      const exact =
-        reelHasExact(grid, 0, sym) || reelHasExact(grid, 1, sym) || reelHasExact(grid, 2, sym);
-      if (!exact) continue;
-      if (
-        reelHasSymOrWild(grid, 0, sym) &&
-        reelHasSymOrWild(grid, 1, sym) &&
-        reelHasSymOrWild(grid, 2, sym)
-      ) {
-        return sym;
-      }
-    }
-    return null;
+  function isPaySym(id) {
+    return !!(C().pays[id]);
   }
 
   /**
-   * Ways pay. Wild substitutes, but a symbol win requires at least one real
-   * instance of that symbol (pure-wild boards do not pay every paytable).
+   * L→R ways. Wild substitutes for pay symbols only.
+   * KEY / CHIP / SCAT do not pay ways.
    */
-  function evaluateWays(grid, bet, globalMult) {
-    const pays = C().pays;
+  function evalWays(grid, bet, breachMult) {
+    const rows = grid[0].length;
     const wins = [];
     let total = 0;
-    const mult = globalMult || 1;
+    const payIds = Object.keys(C().pays);
 
-    for (const sym of Object.keys(pays)) {
-      let ways = 1;
-      let len = 0;
-      let realCount = 0;
+    for (const sym of payIds) {
+      const counts = [];
+      const usedWildMults = [];
       const positions = [];
+      let length = 0;
 
       for (let c = 0; c < C().reels; c++) {
-        let n = 0;
-        let hasReal = false;
-        for (let r = 0; r < rowsOf(grid); r++) {
+        const hits = [];
+        let reelWildMults = [];
+        for (let r = 0; r < rows; r++) {
           const cell = grid[c][r];
-          if (!cell || cell.id === "BLOCK") continue;
-          if (cell.id === sym) {
-            n++;
-            hasReal = true;
-            positions.push({ c, r });
-          } else if (cell.id === "WILD") {
-            n++;
-            positions.push({ c, r });
+          if (!cell) continue;
+          if (cell.id === sym) hits.push({ c, r });
+          else if (cell.id === "WILD") {
+            hits.push({ c, r });
+            reelWildMults.push(cell.mult || 1);
           }
         }
-        if (n === 0) break;
-        ways *= n;
-        len = c + 1;
-        if (hasReal) realCount += 1;
+        if (!hits.length) break;
+        // Prefer real symbol presence for ways adjacency
+        length++;
+        counts.push(hits.length);
+        positions.push(...hits);
+        if (reelWildMults.length) usedWildMults.push(...reelWildMults);
       }
 
-      if (len >= 3 && realCount > 0) {
-        const payArr = pays[sym];
-        const pay = payArr[Math.min(len, payArr.length - 1)] || 0;
-        if (pay > 0) {
-          const amount = +(pay * bet * ways * mult).toFixed(2);
-          // dedupe positions
-          const seen = new Set();
-          const pos = [];
-          for (const p of positions) {
-            if (p.c >= len) continue;
-            const k = p.c + "," + p.r;
-            if (seen.has(k)) continue;
-            seen.add(k);
-            pos.push(p);
-          }
-          wins.push({ type: "ways", symbol: sym, length: len, ways, pay, amount, positions: pos });
-          total += amount;
-        }
-      }
+      if (length < 3) continue;
+      const table = C().pays[sym];
+      const pay = table[length] || 0;
+      if (!(pay > 0)) continue;
+
+      let ways = 1;
+      for (let i = 0; i < length; i++) ways *= counts[i];
+
+      let wildMult = 1;
+      for (const m of usedWildMults) wildMult *= m;
+      if (wildMult > C().wildWinMultCap) wildMult = C().wildWinMultCap;
+
+      const amount = money(bet * pay * ways * wildMult * breachMult);
+      if (amount <= 0) continue;
+      wins.push({
+        sym,
+        length,
+        ways,
+        wildMult,
+        breachMult,
+        amount,
+        positions: positions.filter((p) => {
+          const cell = grid[p.c][p.r];
+          return cell && (cell.id === sym || cell.id === "WILD");
+        })
+      });
+      total = money(total + amount);
     }
-    return { wins, total: +total.toFixed(2) };
+
+    return { wins, total };
   }
 
-  /** Symbol covers all 6 reels (wild may help); used for barrel gold. */
-  function hasFullBoardSymbol(grid) {
-    for (const sym of Object.keys(C().pays)) {
-      let ok = true;
-      let real = false;
-      for (let c = 0; c < C().reels; c++) {
-        if (!reelHasSymOrWild(grid, c, sym)) {
-          ok = false;
-          break;
-        }
-        if (reelHasExact(grid, c, sym)) real = true;
-      }
-      if (ok && real) return sym;
+  function explodeWinners(grid, wins) {
+    const kill = new Set();
+    for (const w of wins) {
+      for (const p of w.positions) kill.add(p.c + "," + p.r);
     }
-    return null;
+    for (const key of kill) {
+      const [c, r] = key.split(",").map(Number);
+      grid[c][r] = null;
+    }
+    return [...kill].map((k) => {
+      const [c, r] = k.split(",").map(Number);
+      return { c, r };
+    });
   }
 
-  function anyWild(grid) {
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
-        if (grid[c][r] && grid[c][r].id === "WILD") return true;
-      }
-    }
-    return false;
-  }
-
-  function collectLocked(grid, premium) {
-    const locked = [];
-    for (let c = 0; c < C().reels; c++) {
-      for (let r = 0; r < rowsOf(grid); r++) {
-        const cell = grid[c][r];
-        if (!cell || cell.id === "BLOCK") continue;
-        if (cell.id === premium || cell.id === "WILD") {
-          locked.push({ c, r, cell: Object.assign({}, cell, { locked: true }) });
-        }
-      }
-    }
-    return locked;
-  }
-
-  /** Drop locked symbols to bottom of each reel; clear other playable cells for respin. */
-  function prepareRespin(grid, mask, premium) {
-    const rows = rowsOf(grid);
-    const next = emptyGrid(rows);
-
-    for (let c = 0; c < C().reels; c++) {
-      // preserve blocks
-      for (let r = 0; r < rows; r++) {
-        if (isBlocked(mask, c, r)) {
-          next[c][r] = Object.assign({}, mask[c][r]);
-        }
-      }
-      // collect locked from bottom to top
-      const keep = [];
-      for (let r = rows - 1; r >= 0; r--) {
-        if (isBlocked(mask, c, r)) continue;
-        const cell = grid[c][r];
-        if (!cell || cell.id === "BLOCK") continue;
-        if (cell.id === premium || cell.id === "WILD") {
-          keep.push(Object.assign({}, cell, { locked: true }));
-        }
-      }
-      // place locked stack on bottom playable cells
-      let ki = 0;
-      for (let r = rows - 1; r >= 0 && ki < keep.length; r--) {
-        if (isBlocked(mask, c, r)) continue;
-        next[c][r] = keep[ki++];
-      }
-    }
-    return next;
-  }
-
-  function refillPlayable(grid, mask, weights) {
-    const rows = rowsOf(grid);
+  function tumbleDown(grid, weights, chipBias) {
+    const rows = grid[0].length;
     const filled = [];
     for (let c = 0; c < C().reels; c++) {
+      const stack = [];
       for (let r = 0; r < rows; r++) {
-        if (isBlocked(mask, c, r)) continue;
-        if (!grid[c][r]) {
-          grid[c][r] = { id: pickWeighted(weights) };
-          filled.push({ c, r });
-        }
+        if (grid[c][r]) stack.push(grid[c][r]);
+      }
+      const missing = rows - stack.length;
+      const newCells = [];
+      for (let i = 0; i < missing; i++) newCells.push(fillCell(weights, chipBias));
+      const col = newCells.concat(stack);
+      for (let r = 0; r < rows; r++) {
+        const prev = grid[c][r];
+        grid[c][r] = col[r];
+        if (!prev && col[r]) filled.push({ c, r });
       }
     }
     return filled;
   }
 
-  function adjacentToLocked(grid, mask, c, r, premium) {
-    const dirs = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1]
-    ];
-    for (const [dc, dr] of dirs) {
-      const nc = c + dc;
-      const nr = r + dr;
-      if (nc < 0 || nc >= C().reels || nr < 0 || nr >= rowsOf(grid)) continue;
-      if (isBlocked(mask, nc, nr)) continue;
-      const cell = grid[nc][nr];
-      if (cell && (cell.id === premium || cell.id === "WILD")) return true;
-    }
-    return false;
-  }
-
-  function resolveBlocks(grid, mask, premium) {
-    const rows = rowsOf(grid);
-    let changed = true;
-    const cleared = [];
-    while (changed) {
-      changed = false;
-      const toClear = [];
-      for (let c = 0; c < C().reels; c++) {
-        for (let r = 0; r < rows; r++) {
-          if (!isBlocked(mask, c, r)) continue;
-          if (adjacentToLocked(grid, mask, c, r, premium)) {
-            toClear.push({ c, r, arrow: mask[c][r].arrow });
-          }
-        }
-      }
-      for (const t of toClear) {
-        if (!isBlocked(mask, t.c, t.r)) continue;
-        mask[t.c][t.r] = null;
-        grid[t.c][t.r] = null;
-        cleared.push(t);
-        changed = true;
-        if (t.arrow === "H") {
-          for (let cc = 0; cc < C().reels; cc++) {
-            if (isBlocked(mask, cc, t.r)) {
-              mask[cc][t.r] = null;
-              grid[cc][t.r] = null;
-              cleared.push({ c: cc, r: t.r, arrow: "H" });
-            }
-          }
-        } else if (t.arrow === "V") {
-          for (let rr = 0; rr < rows; rr++) {
-            if (isBlocked(mask, t.c, rr)) {
-              mask[t.c][rr] = null;
-              grid[t.c][rr] = null;
-              cleared.push({ c: t.c, r: rr, arrow: "V" });
-            }
-          }
-        }
+  function collectKeys(grid, bet) {
+    const keys = [];
+    const chips = [];
+    for (let c = 0; c < grid.length; c++) {
+      for (let r = 0; r < grid[c].length; r++) {
+        const cell = grid[c][r];
+        if (!cell) continue;
+        if (cell.id === "KEY") keys.push({ c, r });
+        if (cell.id === "CHIP") chips.push({ c, r, value: cell.chip || 1 });
       }
     }
-    return cleared;
-  }
-
-  /** True only if newly filled cells contain premium or wild. */
-  function respinGrew(filled, grid, premium) {
-    for (const p of filled) {
-      const cell = grid[p.c][p.r];
-      if (cell && (cell.id === premium || cell.id === "WILD")) return true;
+    if (!keys.length || !chips.length) {
+      return { amount: 0, keys, chips, chipSum: 0 };
     }
-    return false;
+    let chipSum = 0;
+    for (const ch of chips) chipSum += ch.value;
+    chipSum = money(chipSum);
+    const amount = money(bet * chipSum * keys.length);
+    return { amount, keys, chips, chipSum };
   }
 
-  function bonusFromScatters(n) {
-    if (n >= 6) return C().bonuses.mobjob;
-    if (n >= 5) return C().bonuses.payday;
-    if (n >= 4) return C().bonuses.moneyrun;
-    if (n >= 3) return C().bonuses.kingpin;
-    return null;
+  function featureFromScats(n) {
+    const map = C().feature.byScat;
+    const key = Math.min(5, Math.max(3, n));
+    const cfg = map[key] || map[3];
+    return {
+      id: C().feature.id,
+      name: C().feature.name,
+      spins: cfg.spins,
+      gauge: cfg.gauge,
+      scatters: n
+    };
+  }
+
+  function resolveCascade(grid, bet, opts) {
+    const steps = [];
+    const weights = opts.weights;
+    const chipBias = opts.chipBias || 0;
+    let breachIndex = opts.startBreachIndex || 0;
+    let total = 0;
+    let cascades = 0;
+
+    while (cascades < C().maxCascades) {
+      const breachMult = C().breachLadder[Math.min(breachIndex, C().breachLadder.length - 1)];
+      const evaled = evalWays(grid, bet, breachMult);
+      if (!evaled.wins.length) break;
+
+      const removed = explodeWinners(grid, evaled.wins);
+      steps.push({
+        type: "tumbleWin",
+        grid: cloneGrid(grid),
+        wins: evaled.wins,
+        total: evaled.total,
+        breachMult,
+        removed,
+        label: "ways " + breachMult + "x"
+      });
+      total = money(total + evaled.total);
+
+      if (breachIndex < C().breachLadder.length - 1) breachIndex++;
+      steps.push({
+        type: "breach",
+        grid: cloneGrid(grid),
+        breachMult: C().breachLadder[Math.min(breachIndex, C().breachLadder.length - 1)],
+        label: "breach"
+      });
+
+      tumbleDown(grid, weights, chipBias);
+      steps.push({
+        type: "tumble",
+        grid: cloneGrid(grid),
+        label: "tumble"
+      });
+      cascades++;
+    }
+
+    // Key collect after cascades settle
+    const col = collectKeys(grid, bet);
+    if (col.amount > 0) {
+      if (breachIndex < C().breachLadder.length - 1) {
+        breachIndex = Math.min(C().breachLadder.length - 1, breachIndex + 1);
+      }
+      steps.push({
+        type: "collect",
+        grid: cloneGrid(grid),
+        keys: col.keys,
+        chips: col.chips,
+        chipSum: col.chipSum,
+        amount: col.amount,
+        breachMult: C().breachLadder[breachIndex],
+        label: "collect"
+      });
+      total = money(total + col.amount);
+    }
+
+    // Key upgrade for FS gauge (2+ keys in one collect)
+    const keyUpgrade = col.keys.length >= 2;
+
+    return {
+      steps,
+      total,
+      breachIndex,
+      keyUpgrade,
+      grid: cloneGrid(grid)
+    };
+  }
+
+  function placeStickyWilds(grid, count) {
+    const rows = grid[0].length;
+    const slots = [];
+    for (let c = 0; c < C().reels; c++) {
+      for (let r = 0; r < rows; r++) {
+        if (grid[c][r] && grid[c][r].id !== "SCAT") slots.push({ c, r });
+      }
+    }
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = (rng() * (i + 1)) | 0;
+      const t = slots[i];
+      slots[i] = slots[j];
+      slots[j] = t;
+    }
+    for (let i = 0; i < Math.min(count, slots.length); i++) {
+      const { c, r } = slots[i];
+      grid[c][r] = makeWild();
+      grid[c][r].sticky = true;
+    }
+  }
+
+  function maybeStickyWilds(grid, chance) {
+    const rows = grid[0].length;
+    for (let c = 0; c < C().reels; c++) {
+      for (let r = 0; r < rows; r++) {
+        if (grid[c][r] && grid[c][r].id === "WILD" && rng() < chance) {
+          grid[c][r].sticky = true;
+        }
+      }
+    }
+  }
+
+  function playFreeSpins(bet, trigger, modeCfg) {
+    const steps = [];
+    let total = 0;
+    let gauge = trigger.gauge || 1;
+    let spinsLeft = trigger.spins;
+    let spun = 0;
+
+    steps.push({
+      type: "fsStart",
+      grid: emptyGrid(C().rowsBase),
+      trigger,
+      gauge,
+      label: "Vault Breach"
+    });
+
+    while (spinsLeft > 0 && spun < C().maxFsTotal) {
+      spinsLeft--;
+      spun++;
+      const gCfg = C().feature.gauge[gauge] || C().feature.gauge[1];
+      const weights = C().fsWeights;
+      const grid = fillBoard(weights, C().rowsBase, gCfg.chipBias);
+
+      if (spun === 1 && modeCfg && modeCfg.stickyOnFirst) {
+        placeStickyWilds(grid, modeCfg.stickyOnFirst);
+      } else {
+        maybeStickyWilds(grid, gCfg.stickyWildChance);
+      }
+
+      steps.push({
+        type: "fsSpin",
+        grid: cloneGrid(grid),
+        spinsLeft,
+        gauge,
+        gaugeName: gCfg.name,
+        label: "FS " + spun
+      });
+
+      const cascade = resolveCascade(grid, bet, {
+        weights,
+        chipBias: gCfg.chipBias,
+        startBreachIndex: gCfg.startBreachIndex
+      });
+      for (const s of cascade.steps) steps.push(s);
+      total = money(total + cascade.total);
+
+      if (cascade.keyUpgrade && gauge < C().feature.maxGauge) {
+        gauge++;
+        steps.push({
+          type: "fsGauge",
+          grid: cascade.grid,
+          gauge,
+          gaugeName: (C().feature.gauge[gauge] || {}).name,
+          label: "gauge " + gauge
+        });
+      }
+
+      const sc = countScat(cascade.grid);
+      if (sc.n >= 3) {
+        const add = C().feature.retriggerSpins;
+        spinsLeft = Math.min(C().maxFsTotal - spun, spinsLeft + add);
+        steps.push({
+          type: "fsRetrigger",
+          grid: cascade.grid,
+          add,
+          spinsLeft,
+          label: "+" + add + " FS"
+        });
+      }
+    }
+
+    steps.push({
+      type: "fsEnd",
+      grid: steps[steps.length - 1].grid,
+      total,
+      label: "FS end"
+    });
+
+    return { steps, total, gauge };
   }
 
   function playSpin(opts) {
     opts = opts || {};
-    const bet = opts.bet;
-    if (!(bet > 0)) {
-      return {
-        steps: [],
-        grid: emptyGrid(C().rowsBase),
-        totalWin: 0,
-        globalMult: 1,
-        goldWilds: false,
-        scatterCount: 0,
-        scatterPositions: [],
-        trigger: null,
-        retriggerSpins: 0,
-        premium: null,
-        respinCount: 0,
-        hitCap: false,
-        rows: C().rowsBase,
-        mask: null
-      };
-    }
+    const bet = opts.bet || 1;
+    const rows = C().rowsBase;
+    const modeId = opts.mode || (opts.forceBonus ? opts.forceBonus : "base");
+    const modeCfg = C().modes[modeId] || C().modes.base;
 
-    const inBonus = !!opts.inBonus;
-    const bonusCfg = opts.bonusId ? C().bonuses[opts.bonusId] : null;
-    const weights = Object.assign({}, inBonus ? C().bonusWeights : C().baseWeights);
+    // Buy / force modes skip natural base and go to FS
+    const buyMode = modeId !== "base" && modeCfg.forceScat;
 
-    let rows = C().rowsBase;
-    if (inBonus && bonusCfg) rows = bonusCfg.rows;
-    else if (opts.forceRows) rows = opts.forceRows;
-    else if (opts.featureSpin) {
-      const boards = C().enhanced.feature.boards;
-      rows = boards[(rng() * boards.length) | 0];
-    }
+    let steps = [];
+    let totalWin = 0;
+    let grid;
+    let trigger = null;
+    let scatterCount = 0;
+    let hitCap = false;
 
-    let mask;
-    if (opts.persistMask && opts.persistMask.length) {
-      mask = cloneMask(opts.persistMask);
-      rows = rowsOf(mask);
-    } else if (inBonus || opts.featureSpin) {
-      mask = createBlockMask(rows, C().rowsBase);
+    if (!buyMode) {
+      grid = fillBoard(C().baseWeights, rows, 0);
+      steps.push({ type: "spin", grid: cloneGrid(grid), label: "spin" });
+
+      const cascade = resolveCascade(grid, bet, {
+        weights: C().baseWeights,
+        chipBias: 0,
+        startBreachIndex: 0
+      });
+      for (const s of cascade.steps) steps.push(s);
+      totalWin = money(totalWin + cascade.total);
+      grid = cascade.grid;
+
+      const sc = countScat(grid);
+      scatterCount = sc.n;
+      if (sc.n >= 3) {
+        trigger = featureFromScats(sc.n);
+      }
     } else {
-      mask = createBlockMask(rows, rows); // fully unlocked
+      // Forced feature buy
+      const scatN = modeCfg.forceScat || 3;
+      trigger = featureFromScats(scatN);
+      trigger.gauge = modeCfg.startGauge || trigger.gauge;
+      trigger.spins = (C().feature.byScat[scatN] || C().feature.byScat[3]).spins;
+      scatterCount = scatN;
+      grid = fillBoard(C().baseWeights, rows, 0);
+      forceScatters(grid, scatN);
+      steps.push({ type: "spin", grid: cloneGrid(grid), label: "buy" });
     }
 
-    if (opts.enhanced === "heat") {
-      weights.SCAT *= 1.4;
-      weights.WILD *= 1.25;
+    let fsTotal = 0;
+    if (trigger) {
+      const fs = playFreeSpins(bet, trigger, buyMode ? modeCfg : null);
+      for (const s of fs.steps) steps.push(s);
+      fsTotal = fs.total;
+      totalWin = money(totalWin + fsTotal);
+      grid = fs.steps[fs.steps.length - 1].grid || grid;
     }
 
-    let grid = fillBoard(weights, rows, mask, {
-      guaranteeWilds: opts.featureSpin ? C().enhanced.feature.guaranteeWilds : 0
-    });
-
-    if (opts.forceBonus) {
-      forceScatters(grid, mask, C().bonuses[opts.forceBonus].scatters);
-    } else if (opts.enhanced === "overload") {
-      forceScatters(grid, mask, C().enhanced.overload.minScat);
-    } else if (opts.mystery) {
-      const roll = rng();
-      let acc = 0;
-      let picked = "dead";
-      for (const o of C().mystery.outcomes) {
-        acc += o.w;
-        if (roll <= acc) {
-          picked = o.type;
-          break;
-        }
-      }
-      if (picked === "dead") stripScatters(grid);
-      else forceScatters(grid, mask, C().bonuses[picked].scatters);
+    if (totalWin > bet * C().maxWinCap) {
+      totalWin = money(bet * C().maxWinCap);
+      hitCap = true;
     }
-
-    const steps = [];
-    steps.push({ type: "spin", grid: cloneGrid(grid), label: "spin" });
-
-    const landScat = countScatters(grid);
-    let premium = detectPremiumTrigger(grid);
-    let chain = 0;
-
-    while (premium && chain < C().maxRespinChain) {
-      chain++;
-      const lockedList = collectLocked(grid, premium);
-      steps.push({
-        type: "lock",
-        grid: cloneGrid(grid),
-        premium,
-        locked: lockedList.map((x) => x.c + "," + x.r),
-        label: "lock " + premium
-      });
-
-      grid = prepareRespin(grid, mask, premium);
-      const filled = refillPlayable(grid, mask, weights);
-
-      if (inBonus || opts.featureSpin) {
-        const cleared = resolveBlocks(grid, mask, premium);
-        if (cleared.length) {
-          refillPlayable(grid, mask, weights);
-          steps.push({
-            type: "arrow",
-            grid: cloneGrid(grid),
-            cleared,
-            label: "board expand"
-          });
-        }
-      }
-
-      // re-mark locks after drop
-      collectLocked(grid, premium);
-      steps.push({
-        type: "respin",
-        grid: cloneGrid(grid),
-        premium,
-        label: "respin"
-      });
-
-      if (!respinGrew(filled, grid, premium)) break;
-    }
-
-    let globalMult = 1;
-    let goldWilds = false;
-    const wildPositions = [];
-    if (anyWild(grid) && hasFullBoardSymbol(grid)) {
-      goldWilds = true;
-      const minMult = bonusCfg ? bonusCfg.minWildMult : 2;
-      globalMult = pickWildMult(minMult);
-      for (let c = 0; c < C().reels; c++) {
-        for (let r = 0; r < rowsOf(grid); r++) {
-          if (grid[c][r] && grid[c][r].id === "WILD") {
-            grid[c][r].gold = true;
-            grid[c][r].mult = globalMult;
-            wildPositions.push({ c, r });
-          }
-        }
-      }
-      steps.push({
-        type: "barrel",
-        grid: cloneGrid(grid),
-        globalMult,
-        wildPositions,
-        label: "barrel " + globalMult + "x"
-      });
-    }
-
-    const evalResult = evaluateWays(grid, bet, globalMult);
-    let totalWin = evalResult.total;
-    const cap = C().maxWinCap * bet;
-    if (totalWin > cap) totalWin = cap;
 
     steps.push({
       type: "pay",
       grid: cloneGrid(grid),
-      wins: evalResult.wins,
-      total: +totalWin.toFixed(2),
-      globalMult,
+      total: totalWin,
       label: "pay"
     });
-
-    let trigger = null;
-    if (!inBonus) trigger = bonusFromScatters(landScat.n);
-
-    let retriggerSpins = 0;
-    if (inBonus && landScat.n > 0) {
-      retriggerSpins = landScat.n * C().scatterRetrigger;
-    }
 
     return {
       steps,
       grid: cloneGrid(grid),
-      totalWin: +totalWin.toFixed(2),
-      globalMult,
-      goldWilds,
-      scatterCount: landScat.n,
-      scatterPositions: landScat.positions,
+      totalWin,
+      scatterCount,
       trigger,
-      retriggerSpins,
-      premium,
-      respinCount: chain,
-      hitCap: totalWin >= cap - 0.01,
+      fsTotal,
+      hitCap,
       rows,
-      mask: cloneMask(mask)
+      mode: modeId,
+      costMult: modeCfg.cost || 1,
+      // legacy fields cleared so Goblin UI paths don't fire
+      premium: null,
+      respinCount: 0,
+      globalMult: 1,
+      goldWilds: false,
+      retriggerSpins: 0,
+      mask: null
     };
+  }
+
+  function createEmptyGrid() {
+    return emptyGrid(C().rowsBase);
   }
 
   return {
     seed,
     playSpin,
-    bonusFromScatters,
-    emptyGrid,
     cloneGrid,
-    countScatters,
-    rowsOf,
-    createBlockMask,
-    cloneMask
+    createEmptyGrid,
+    // stubs kept so old callers don't crash
+    createBlockMask: function () {
+      return null;
+    },
+    cloneMask: function () {
+      return null;
+    }
   };
 })();

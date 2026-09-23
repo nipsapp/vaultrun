@@ -1,34 +1,45 @@
 # Vault Run
 
-HTML5 slot demo — **Goblin Rush rule family**, vault theme variant.
+HTML5 slot — **Circuit Breach** math (original). Casino heist theme, **not** a Goblin Rush lock-respin clone.
 
-## Rules (aligned with Goblin Rush brief)
+Live demo: https://vaultrun.onrender.com
 
-| Item | Implementation |
+## Math identity (Stake originality)
+
+| Item | Circuit Breach |
 |------|----------------|
-| Grid | **6×3** ways base; bonus expands to **6×5 / 6×6 / 6×7** |
-| Core | Premium on reels **1–2–3** → lock premium + wilds → chained **respins** |
-| Wilds | Barrel wilds → gold when full L→R coverage → global mult **2–20×** |
-| Bonus board | Blocked cells with **↔ / ↕** arrows; adjacent lock clears path |
-| Bonuses | Kingpin (3) · Money Run (4) · Payday (5) · Mob Job (6) |
-| Mystery | 51% dead / 40% Money Run / 8% Payday / 1% Mob Job |
-| Enhanced | 3× · 25× (4+ scat) · **500× Feature Spin** (4 wilds, random board) |
-| Max win | **40,000×** |
+| Grid | **5×4** ways |
+| Core | **Tumble / cascade** — winning symbols explode, board refills |
+| Mult | **Breach Mult** ladder 1→2→3→5→8→12× per cascade |
+| Wilds | **Drill** wilds with **personal** mults (2/3/5/10) — no gold barrels / global 2–20× |
+| Collect | **Keys** collect visible **Cash Chip** values after cascades |
+| Feature | **One** bonus: **Vault Breach** FS (3+ Circuits). Gauge upgrades Safe Crack → Strongroom → Vault Floor |
+| Buys | Stake-style modes: `bonus` 80× · `bonus_max` 200× · `super` 500× |
+| Max win | **20,000×** · RTP target **96%** |
+| Books | Entire FS sequence resolves in **one** spin (stateless / Stake-ready) |
+
+Removed on purpose (rejection risks): premium lock on reels 1–3, chained respins, barrel gold, blocked cells + arrows, 3/4/5/6 named bonus ladder (Kingpin / Money Run / Payday / Mob Job).
 
 ## Play
 
-Serve the folder over HTTP, then open it in a browser (hard-refresh / Ctrl+F5 if an older service worker is cached).
-
 ```bash
+# Client only
 npx serve .
+
+# Full stack
+cd server && npm install && npm start
+# → http://localhost:8787
 ```
 
-Particle spam and the idle redraw loop were removed for smoother play.
+## Stake Engine path
+
+1. Prototype math lives in `js/config.js` + `js/engine.js` (done — Circuit Breach).
+2. Next: export **static books** (`index.json` + `.jsonl.zst` + CSV) via Stake math-sdk.
+3. Wire frontend to Stake RGS: `authenticate` → `play` → `end-round` (replace invent-your-own wallet paths).
+4. Submit math + FE for approval on [stake-engine.com](https://stake-engine.com/).
+
+See `server/README.md` for API / RNG / RGS notes.
 
 ## Casino visuals
 
-The live game uses `assets/casino/`: a generated WebP backdrop and vault emblem,
-plus four optimized WebP frames per symbol. The original source artwork remains
-under `assets/antique/` for future editing. The active image set is about 1.2 MB;
-the background is about 138 KB. Buttons, meters, and reel framing are CSS so they
-stay crisp on phones and desktops.
+`assets/casino/` WebP frames. KEY→FREESPIN art alias, CHIP→COIN. Source art under `assets/antique/`.

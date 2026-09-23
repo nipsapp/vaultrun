@@ -1,6 +1,7 @@
 /**
- * Vault Run — app
+ * Vault Run — app (Circuit Breach)
  * Prefers authoritative server resolve; falls back to local engine if API offline.
+ * Free spins resolve in one spin result (Stake-ready book style).
  */
 window.VR = window.VR || {};
 
@@ -18,9 +19,10 @@ VR.App = (function () {
     bonusName: "",
     bonusSpinsLeft: 0,
     bonusWin: 0,
-    bonusMask: null,
     grid: null,
-    serverMode: false
+    serverMode: false,
+    breachMult: 1,
+    gauge: 0
   };
 
   function betValue() {
@@ -39,7 +41,7 @@ VR.App = (function () {
       console.warn(e);
     }
     document.body.classList.add("art-ready");
-    // Connect game server if available
+
     const up = await VR.API.probe();
     if (up) {
       try {
@@ -49,7 +51,6 @@ VR.App = (function () {
         else {
           const st = await VR.API.state();
           state.balance = st.balance;
-          applyPlayerState(st.playerState);
         }
         VR.UI.toast("Connected to game server");
       } catch (e) {
@@ -58,6 +59,7 @@ VR.App = (function () {
       }
     }
 
+    state.grid = VR.Engine.createEmptyGrid();
     const boot = VR.Engine.playSpin({ bet: state.bet });
     state.grid = boot.grid;
 
@@ -70,13 +72,13 @@ VR.App = (function () {
       bet: (dir) => changeBet(dir),
       toggleAuto: () => VR.UI.openPanel("auto"),
       setAuto: (n) => {
-        if (state.busy || state.inBonus) return;
+        if (state.busy) return;
         state.autoLeft = n;
         VR.UI.refresh(state);
         requestSpin();
       },
       buy: (id) => buyFeature(id),
-      enhanced: (id) => enhancedSpin(id),
+      enhanced: () => {},
       mute: () => {
         state.muted = !state.muted;
         VR.Audio.setMuted(state.muted);
@@ -87,8 +89,8 @@ VR.App = (function () {
     VR.UI.refresh(state);
     VR.UI.setStatus(
       state.serverMode
-        ? "Online · server-resolved spins"
-        : "Offline demo · local RNG (start server for full backend)"
+        ? "Online · Circuit Breach · server RNG"
+        : "Offline demo · Circuit Breach local RNG"
     );
 
     setInterval(() => {
@@ -102,17 +104,8 @@ VR.App = (function () {
     }
   }
 
-  function applyPlayerState(ps) {
-    if (!ps) return;
-    state.inBonus = !!ps.inBonus;
-    state.bonusId = ps.bonusId;
-    state.bonusName = ps.bonusName || "";
-    state.bonusSpinsLeft = ps.bonusSpinsLeft || 0;
-    state.bonusWin = ps.bonusWin || 0;
-  }
-
   function changeBet(dir) {
-    if (state.busy || state.inBonus) return;
+    if (state.busy) return;
     state.betIndex = Math.max(0, Math.min(VR.CONFIG.betSteps.length - 1, state.betIndex + dir));
     state.bet = betValue();
     VR.Audio.click();
@@ -128,8 +121,11 @@ VR.App = (function () {
     if (state.busy) return;
     VR.Audio.unlock();
 
-    const cost = opts.cost != null ? opts.cost : state.bet;
-    if (!state.inBonus && !canAfford(cost)) {
+    const mode = opts.mode || "base";
+    const modeCfg = VR.CONFIG.modes[mode] || VR.CONFIG.modes.base;
+    const cost = opts.cost != null ? opts.cost : state.bet * (modeCfg.cost || 1);
+
+    if (!canAfford(cost)) {
       VR.UI.toast("Insufficient balance");
       state.autoLeft = 0;
       VR.UI.refresh(state);
@@ -137,50 +133,29 @@ VR.App = (function () {
     }
 
     state.busy = true;
+    state.inBonus = false;
     VR.UI.refresh(state);
 
     try {
-      VR.UI.setStatus(state.inBonus ? "Bonus spin…" : "Spinning…");
+      VR.UI.setStatus("Spinning…");
       VR.Audio.spin();
 
       let result;
-      let bonusJustEnded = null;
 
       if (state.serverMode) {
-        const payload = {
+        const res = await VR.API.spin({
           bet: state.bet,
-          forceBonus: opts.forceBonus || null,
-          enhanced: opts.enhanced || null,
-          mystery: !!opts.mystery,
-          featureSpin: !!opts.featureSpin,
-          forceRows: opts.forceRows || null
-        };
-        const res = await VR.API.spin(payload);
+          mode,
+          forceBonus: mode !== "base" ? mode : null
+        });
         state.balance = res.balance;
         result = res.result;
-        applyPlayerState(res.playerState);
-        bonusJustEnded = res.bonusJustEnded;
-        // Server already applied wallet; don't double-credit locally
-        await playTimeline(result, { skipWallet: true, bonusJustEnded });
+        await playTimeline(result, { skipWallet: true });
       } else {
-        // Local fallback (demo only)
-        if (!state.inBonus) {
-          state.balance = +(state.balance - cost).toFixed(2);
-          state.lastWin = 0;
-        }
+        state.balance = +(state.balance - cost).toFixed(2);
+        state.lastWin = 0;
         VR.UI.refresh(state);
-        result = VR.Engine.playSpin({
-          bet: state.bet,
-          inBonus: state.inBonus,
-          bonusId: state.bonusId,
-          forceBonus: opts.forceBonus || null,
-          enhanced: opts.enhanced || null,
-          mystery: !!opts.mystery,
-          featureSpin: !!opts.featureSpin,
-          forceRows: opts.forceRows || null,
-          persistMask: state.inBonus ? state.bonusMask : null
-        });
-        if (state.inBonus && result.mask) state.bonusMask = VR.Engine.cloneMask(result.mask);
+        result = VR.Engine.playSpin({ bet: state.bet, mode });
         await playTimeline(result, { skipWallet: false });
       }
     } catch (err) {
@@ -189,17 +164,15 @@ VR.App = (function () {
       if (err.status === 401) state.serverMode = false;
     } finally {
       state.busy = false;
+      state.inBonus = false;
       VR.UI.refresh(state);
-      VR.UI.setStatus(state.inBonus ? state.bonusName + " active" : "Ready");
+      VR.UI.setStatus("Ready");
     }
 
-    if (state.autoLeft > 0 && !state.inBonus) {
+    if (state.autoLeft > 0) {
       state.autoLeft -= 1;
       VR.UI.refresh(state);
       await wait(520);
-      requestSpin();
-    } else if (state.inBonus && state.bonusSpinsLeft > 0) {
-      await wait(560);
       requestSpin();
     }
   }
@@ -213,61 +186,82 @@ VR.App = (function () {
       VR.Render.drawFrame(state.grid);
     }
     VR.Audio.stop();
-    await wait(180);
+    await wait(160);
 
     for (let i = 1; i < result.steps.length; i++) {
       const step = result.steps[i];
-      state.grid = step.grid;
+      if (step.grid) state.grid = step.grid;
 
-      if (step.type === "lock") {
-        const pos = (step.locked || []).map((k) => {
-          const parts = String(k).split(",");
-          return { c: +parts[0], r: +parts[1] };
-        });
+      if (step.type === "tumbleWin") {
+        const pos = [];
+        (step.wins || []).forEach((w) => pos.push(...(w.positions || [])));
         VR.Render.setFlash(pos);
-        VR.UI.setStatus("LOCK " + step.premium + " · Respinning…");
-        VR.Audio.cascade();
+        VR.UI.setStatus(
+          (step.breachMult > 1 ? step.breachMult + "× Breach · " : "") +
+            "Win " +
+            VR.UI.money(step.total)
+        );
+        VR.Audio.win();
         await VR.Render.playWinAnim(state.grid, pos, 900);
-        await wait(220);
+        await wait(180);
         VR.Render.clearFlash();
         VR.Render.drawFrame(state.grid);
-      } else if (step.type === "respin") {
-        await VR.Render.animateSpin(state.grid, step.grid, 1200, { respin: true });
+      } else if (step.type === "tumble") {
+        await VR.Render.animateSpin(state.grid, step.grid, 900, { respin: true });
         state.grid = step.grid;
         VR.Render.drawFrame(state.grid);
-        VR.UI.setStatus("Respin ×" + (result.respinCount || ""));
-        await wait(160);
-      } else if (step.type === "arrow") {
-        VR.UI.setStatus("Board unlocked");
+        VR.Audio.cascade();
+        await wait(100);
+      } else if (step.type === "breach") {
+        state.breachMult = step.breachMult || 1;
+        VR.UI.setStatus("Breach Mult " + state.breachMult + "×");
         VR.Audio.heat();
         VR.Render.drawFrame(state.grid);
-        await wait(520);
-      } else if (step.type === "barrel") {
-        VR.Render.setGold(step.wildPositions || []);
-        VR.UI.setStatus("Wild barrels · Global " + step.globalMult + "×");
-        VR.Audio.collect();
-        await VR.Render.playWinAnim(state.grid, step.wildPositions || [], 1100);
         await wait(280);
-        VR.Render.setGold([]);
+      } else if (step.type === "collect") {
+        const pos = (step.keys || []).concat(step.chips || []);
+        VR.Render.setFlash(pos);
+        VR.UI.setStatus("Keys collect · " + VR.UI.money(step.amount));
+        VR.Audio.collect();
+        await VR.Render.playWinAnim(state.grid, pos, 1000);
+        await wait(200);
+        VR.Render.clearFlash();
         VR.Render.drawFrame(state.grid);
-      } else if (step.type === "pay") {
-        if (step.wins && step.wins.length) {
-          const pos = [];
-          step.wins.forEach((w) => pos.push(...w.positions));
-          VR.Render.setFlash(pos);
-          VR.Audio.win();
-          VR.UI.setStatus(
-            (step.globalMult > 1 ? step.globalMult + "× · " : "") +
-              "Win " +
-              VR.UI.money(step.total)
-          );
-          await VR.Render.playWinAnim(state.grid, pos, 1000);
-          await wait(240);
-          VR.Render.clearFlash();
-          VR.Render.drawFrame(state.grid);
-        } else {
-          VR.Render.drawFrame(state.grid);
+      } else if (step.type === "fsStart") {
+        state.inBonus = true;
+        state.bonusName = (step.trigger && step.trigger.name) || "Vault Breach";
+        state.bonusSpinsLeft = (step.trigger && step.trigger.spins) || 0;
+        state.gauge = step.gauge || 1;
+        VR.UI.refresh(state);
+        VR.Audio.bonus();
+        await VR.UI.showBonusIntro(step.trigger || { name: state.bonusName, spins: state.bonusSpinsLeft });
+      } else if (step.type === "fsSpin") {
+        state.bonusSpinsLeft = step.spinsLeft;
+        state.gauge = step.gauge || state.gauge;
+        VR.UI.refresh(state);
+        VR.UI.setStatus((step.gaugeName || "FS") + " · " + step.spinsLeft + " left");
+        await VR.Render.animateSpin(state.grid, step.grid, 1400);
+        state.grid = step.grid;
+        VR.Render.drawFrame(state.grid);
+        await wait(120);
+      } else if (step.type === "fsGauge") {
+        state.gauge = step.gauge;
+        VR.UI.toast("Vault Gauge → " + (step.gaugeName || step.gauge));
+        VR.Audio.heat();
+        await wait(400);
+      } else if (step.type === "fsRetrigger") {
+        state.bonusSpinsLeft = step.spinsLeft;
+        VR.UI.toast("+" + step.add + " free spins");
+        VR.UI.refresh(state);
+        await wait(350);
+      } else if (step.type === "fsEnd") {
+        state.inBonus = false;
+        VR.UI.refresh(state);
+        if (step.total > 0) {
+          await VR.UI.showWinBanner(step.total, state.bet, "bonus");
         }
+      } else if (step.type === "pay") {
+        VR.Render.drawFrame(state.grid);
       } else {
         VR.Render.drawFrame(state.grid);
       }
@@ -276,129 +270,31 @@ VR.App = (function () {
     state.grid = result.grid;
     VR.Render.drawFrame(state.grid);
     state.lastWin = result.totalWin;
+    state.inBonus = false;
 
-    if (!flags.skipWallet) {
-      // Local mode wallet + bonus transitions
-      if (state.inBonus) {
-        state.bonusWin = +(state.bonusWin + result.totalWin).toFixed(2);
-        state.bonusSpinsLeft -= 1;
-        if (result.retriggerSpins > 0) {
-          state.bonusSpinsLeft += result.retriggerSpins;
-          VR.UI.toast("+" + result.retriggerSpins + " free spins");
-        }
-      }
-      if (result.totalWin > 0) {
-        state.balance = +(state.balance + result.totalWin).toFixed(2);
-      }
-      if (!state.inBonus && result.trigger) {
-        await enterBonusLocal(result.trigger);
-      } else if (state.inBonus && state.bonusSpinsLeft <= 0) {
-        await exitBonusLocal();
-      } else if (!state.inBonus) {
-        VR.Render.setRows(VR.CONFIG.rowsBase);
-        VR.Render.drawFrame(state.grid);
-      }
-    } else {
-      // Server mode: state already applied; handle UI for bonus enter/exit
-      if (result.trigger && state.inBonus && state.bonusSpinsLeft === result.trigger.spins) {
-        VR.Render.setRows(result.trigger.rows);
-        VR.Audio.bonus();
-        await VR.UI.showBonusIntro(result.trigger);
-        VR.Render.drawFrame(state.grid);
-      }
-      if (flags.bonusJustEnded) {
-        VR.Render.setRows(VR.CONFIG.rowsBase);
-        VR.Render.drawFrame(state.grid);
-        await VR.UI.showWinBanner(flags.bonusJustEnded.total, state.bet, "bonus");
-        VR.UI.toast(flags.bonusJustEnded.name + " total " + VR.UI.money(flags.bonusJustEnded.total));
-      } else if (!state.inBonus) {
-        VR.Render.setRows(VR.CONFIG.rowsBase);
-        VR.Render.drawFrame(state.grid);
-      }
-      if (result.retriggerSpins > 0) {
-        VR.UI.toast("+" + result.retriggerSpins + " free spins");
-      }
+    if (!flags.skipWallet && result.totalWin > 0) {
+      state.balance = +(state.balance + result.totalWin).toFixed(2);
     }
 
     if (result.totalWin > 0) {
       const mult = result.totalWin / state.bet;
       if (mult >= 8 || result.hitCap) {
         VR.Audio.bigWin();
-        await VR.UI.showWinBanner(result.totalWin, state.bet, state.inBonus ? "bonus" : "base");
+        await VR.UI.showWinBanner(result.totalWin, state.bet, result.fsTotal > 0 ? "bonus" : "base");
       }
-    }
-  }
-
-  async function enterBonusLocal(bonus) {
-    state.inBonus = true;
-    state.bonusId = bonus.id;
-    state.bonusName = bonus.name;
-    state.bonusSpinsLeft = bonus.spins;
-    state.bonusWin = 0;
-    state.autoLeft = 0;
-    state.bonusMask = VR.Engine.createBlockMask(bonus.rows, VR.CONFIG.rowsBase);
-    VR.Render.setRows(bonus.rows);
-    VR.Audio.bonus();
-    await VR.UI.showBonusIntro(bonus);
-    VR.UI.refresh(state);
-  }
-
-  async function exitBonusLocal() {
-    const payout = state.bonusWin;
-    const name = state.bonusName;
-    state.inBonus = false;
-    state.bonusId = null;
-    state.bonusName = "";
-    state.bonusSpinsLeft = 0;
-    state.bonusMask = null;
-    VR.Render.setRows(VR.CONFIG.rowsBase);
-    VR.UI.refresh(state);
-    if (payout > 0) {
-      await VR.UI.showWinBanner(payout, state.bet, "bonus");
-      VR.UI.toast(name + " total " + VR.UI.money(payout));
     }
   }
 
   function buyFeature(id) {
-    if (state.busy || state.inBonus) return;
-    let cost = 0;
-    let opts = {};
-    if (id === "kingpin") {
-      cost = state.bet * VR.CONFIG.bonuses.kingpin.buyCost;
-      opts = { cost, forceBonus: "kingpin" };
-    } else if (id === "moneyrun") {
-      cost = state.bet * VR.CONFIG.bonuses.moneyrun.buyCost;
-      opts = { cost, forceBonus: "moneyrun" };
-    } else if (id === "mystery") {
-      cost = state.bet * VR.CONFIG.mystery.buyCost;
-      opts = { cost, mystery: true };
-    } else return;
+    if (state.busy) return;
+    const mode = VR.CONFIG.modes[id];
+    if (!mode || id === "base") return;
+    const cost = state.bet * mode.cost;
     if (!canAfford(cost)) {
       VR.UI.toast("Insufficient balance");
       return;
     }
-    requestSpin(opts);
-  }
-
-  function enhancedSpin(id) {
-    if (state.busy || state.inBonus) return;
-    if (id === "feature") {
-      const cost = state.bet * VR.CONFIG.enhanced.feature.costMult;
-      if (!canAfford(cost)) {
-        VR.UI.toast("Insufficient balance");
-        return;
-      }
-      requestSpin({ cost, featureSpin: true });
-      return;
-    }
-    const cfg = VR.CONFIG.enhanced[id];
-    if (!cfg) return;
-    const cost = state.bet * cfg.costMult;
-    if (!canAfford(cost)) {
-      VR.UI.toast("Insufficient balance");
-      return;
-    }
-    requestSpin({ cost, enhanced: id });
+    requestSpin({ mode: id, cost });
   }
 
   function wait(ms) {

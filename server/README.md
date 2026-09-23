@@ -1,6 +1,10 @@
 # Vault Run Game Server
 
-Authoritative backend for **Vault Run**: wallet, sessions, spin resolve, pluggable RNG, and Stake Engine / RGS adapter.
+Authoritative backend for **Vault Run · Circuit Breach**: wallet, sessions, one-shot spin books, pluggable RNG, Stake Engine / RGS adapter stub.
+
+## Math
+
+Server loads `../js/config.js` + `../js/engine.js` (same Circuit Breach engine as the client). Free spins are fully resolved inside a single `playSpin` — no cross-spin bonus mask.
 
 ## Quick start
 

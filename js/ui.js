@@ -95,12 +95,10 @@ VR.UI = (function () {
       const el = $(sel);
       if (el) el.textContent = money(b * mult);
     };
-    setCost("#cost-kingpin", VR.CONFIG.bonuses.kingpin.buyCost);
-    setCost("#cost-moneyrun", VR.CONFIG.bonuses.moneyrun.buyCost);
-    setCost("#cost-mystery", VR.CONFIG.mystery.buyCost);
-    setCost("#cost-heat", VR.CONFIG.enhanced.heat.costMult);
-    setCost("#cost-overload", VR.CONFIG.enhanced.overload.costMult);
-    setCost("#cost-feature", VR.CONFIG.enhanced.feature.costMult);
+    const modes = VR.CONFIG.modes || {};
+    if (modes.bonus) setCost("#cost-bonus", modes.bonus.cost);
+    if (modes.bonus_max) setCost("#cost-bonus-max", modes.bonus_max.cost);
+    if (modes.super) setCost("#cost-super", modes.super.cost);
   }
 
   function toast(msg) {
@@ -138,9 +136,12 @@ VR.UI = (function () {
 
   function showBonusIntro(bonus) {
     const el = $("#bonus-intro");
-    $("#bonus-intro-title").textContent = bonus.name.toUpperCase();
+    const name = (bonus && bonus.name) || "Vault Breach";
+    const spins = (bonus && bonus.spins) || 8;
+    const gauge = (bonus && bonus.gauge) || 1;
+    $("#bonus-intro-title").textContent = name.toUpperCase();
     $("#bonus-intro-sub").textContent =
-      bonus.spins + " Free Spins  ·  Board 6×" + bonus.rows + "  ·  Vol " + bonus.vol;
+      spins + " Free Spins  ·  Vault Gauge " + gauge;
     el.classList.add("show");
     return new Promise((res) => {
       let done = false;

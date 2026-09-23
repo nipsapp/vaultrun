@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#18052f" />
-  <meta name="description" content="Vault Run — 6×3 ways lock & respin slot. Barrel wilds, expanding bonus board." />
+  <meta name="description" content="Vault Run — Circuit Breach: 5×4 tumble ways, Key collect, Vault Breach free spins." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23020617'/%3E%3Ccircle cx='32' cy='32' r='18' fill='%23fbbf24'/%3E%3C/svg%3E" />
@@ -20,19 +20,19 @@
         <div class="logo" aria-hidden="true"></div>
         <div>
           <h1>VAULT RUN</h1>
-          <p class="tag">THE ULTIMATE VAULT SLOT</p>
+          <p class="tag">CIRCUIT BREACH</p>
         </div>
       </div>
       <button id="btn-mute" class="icon-btn" aria-label="Mute">🔊</button>
     </header>
 
     <div id="bonus-bar" class="bonus-bar" aria-live="polite">
-      <span id="bonus-name">Kingpin</span>
-      <span id="bonus-spins">10 SPINS</span>
+      <span id="bonus-name">Vault Breach</span>
+      <span id="bonus-spins">8 SPINS</span>
     </div>
 
     <main class="stage">
-      <div class="stage-heading"><span>✦ LOCK &amp; RESPIN ✦</span><strong>FORTUNE FAVORS THE BOLD</strong><span>✦ UP TO 40,000× ✦</span></div>
+      <div class="stage-heading"><span>✦ CIRCUIT BREACH ✦</span><strong>TUMBLE · COLLECT · CRACK</strong><span>✦ UP TO 20,000× ✦</span></div>
       <div class="reel-frame">
         <canvas id="reels" width="720" height="360"></canvas>
       </div>
@@ -71,49 +71,27 @@
       <h2>Feature Buy</h2>
       <button class="icon-btn" data-close>×</button>
     </header>
-    <p class="panel-note">Choose your vault feature. Prices scale with your current bet.</p>
-    <button class="buy-row" data-buy="kingpin">
+    <p class="panel-note">Stake-style bet modes. Prices scale with your current bet.</p>
+    <button class="buy-row" data-buy="bonus">
       <div>
-        <strong>Kingpin</strong>
-        <small>3 scatters · 10 FS · board 6×5</small>
+        <strong>Vault Breach</strong>
+        <small>3 Circuits · 8 FS · Gauge 1</small>
       </div>
-      <span id="cost-kingpin">80.00</span>
+      <span id="cost-bonus">80.00</span>
     </button>
-    <button class="buy-row" data-buy="moneyrun">
+    <button class="buy-row" data-buy="bonus_max">
       <div>
-        <strong>Money Run</strong>
-        <small>4 scatters · 12 FS · board 6×6</small>
+        <strong>Strongroom Buy</strong>
+        <small>4 Circuits · 10 FS · Gauge 2</small>
       </div>
-      <span id="cost-moneyrun">200.00</span>
+      <span id="cost-bonus-max">200.00</span>
     </button>
-    <button class="buy-row" data-buy="mystery">
+    <button class="buy-row" data-buy="super">
       <div>
-        <strong>Mystery Bonus</strong>
-        <small>51% dead · 40% Money Run · 8% Payday · 1% Mob Job</small>
+        <strong>Vault Floor Buy</strong>
+        <small>5 Circuits · 12 FS · Gauge 3 · sticky drills</small>
       </div>
-      <span id="cost-mystery">100.00</span>
-    </button>
-    <h3 class="subhead">Enhanced Spins</h3>
-    <button class="buy-row" data-enhanced="heat">
-      <div>
-        <strong>Enhanced Spin</strong>
-        <small>3× bet · hotter strips</small>
-      </div>
-      <span id="cost-heat">3.00</span>
-    </button>
-    <button class="buy-row" data-enhanced="overload">
-      <div>
-        <strong>Hot Enhanced</strong>
-        <small>25× bet · guarantees 4+ scatters</small>
-      </div>
-      <span id="cost-overload">25.00</span>
-    </button>
-    <button class="buy-row" data-enhanced="feature">
-      <div>
-        <strong>Feature Spin</strong>
-        <small>500× bet · random 6×5–7 board · 4 wilds</small>
-      </div>
-      <span id="cost-feature">500.00</span>
+      <span id="cost-super">500.00</span>
     </button>
   </aside>
 
@@ -137,25 +115,15 @@
     </header>
     <div class="info-body">
       <h3>Ways</h3>
-      <p>Base game is <strong>6 wide × 3 high</strong> ways (left to right). Wild substitutes for pay symbols.</p>
-      <h3>Lock &amp; Respin</h3>
-      <p>When the same <strong>premium</strong> symbol lands on reels <strong>1, 2 and 3</strong>, that symbol and all wilds <strong>lock</strong>. Everything else respins. Locked symbols drop to the bottom. If another locked symbol or wild lands, it respins again until none land.</p>
-      <h3>Barrel Wilds</h3>
-      <p>If wilds are on the board and a pay symbol covers all reels left to right, wilds turn gold. After respins finish, barrels open and reveal a <strong>global multiplier</strong>: 2×, 3×, 5×, 10×, 15× or 20× applied to all wins.</p>
-      <h3>Bonus Board</h3>
-      <p>Free spins expand the board (up to 6×7). Extra rows start <strong>blocked</strong> with ↔ / ↕ arrows. When a locked symbol or wild lands next to a block, it breaks — arrows clear the row or column (Space Miners–style).</p>
-      <h3>Free Spins</h3>
-      <ul>
-        <li><strong>Kingpin</strong> — 3 scatters · 10 FS · 6×5</li>
-        <li><strong>Money Run</strong> — 4 scatters · 12 FS · 6×6</li>
-        <li><strong>Payday</strong> — 5 scatters · 12 FS · 6×6 · min 5× barrel</li>
-        <li><strong>Mob Job</strong> — 6 scatters · 12 FS · 6×7 · min 10× barrel</li>
-      </ul>
-      <p>In bonus, each scatter awards +1 free spin.</p>
-      <h3>Feature Spin</h3>
-      <p><strong>500× bet</strong> — random board 6×5 / 6×6 / 6×7 with <strong>4 wilds</strong> guaranteed. Extra rows start blocked.</p>
+      <p>Base game is <strong>5 wide × 4 high</strong> ways (left to right). Drill Wilds substitute for pay symbols and carry a personal multiplier.</p>
+      <h3>Tumble &amp; Breach Mult</h3>
+      <p>Winning symbols explode and new ones tumble in. Each cascade advances the <strong>Breach Mult</strong> (1× → 2× → 3× → 5× → 8× → 12×).</p>
+      <h3>Keys &amp; Cash Chips</h3>
+      <p>After cascades settle, every <strong>Key</strong> collects the sum of all visible <strong>Cash Chip</strong> values (× bet × number of keys).</p>
+      <h3>Vault Breach</h3>
+      <p>Land <strong>3+ Circuit</strong> scatters to enter free spins. One feature — scatter count only changes spin count and starting Vault Gauge (Safe Crack → Strongroom → Vault Floor). Land 2+ Keys in a cascade to upgrade the Gauge.</p>
       <h3>Max Win</h3>
-      <p>40,000× bet. Demo client RNG — swap to certified RGS before certification.</p>
+      <p>20,000× bet. Math id: Circuit Breach — built for Stake Engine originality review.</p>
     </div>
   </aside>
 
@@ -164,7 +132,7 @@
       <h2>Vault Run</h2>
       <button class="icon-btn" data-close>×</button>
     </header>
-    <p class="panel-note">Vault Run · Lock symbols, trigger respins, and chase the jackpot.</p>
+    <p class="panel-note">Vault Run · Circuit Breach — tumble, collect, crack the vault.</p>
     <button class="buy-row" data-close>
       <div><strong>Continue</strong><small>Return to game</small></div>
       <span>→</span>
@@ -182,8 +150,8 @@
   <div id="bonus-intro" class="bonus-intro">
     <div class="bonus-card">
       <p class="eyebrow">FEATURE UNLOCKED</p>
-      <h2 id="bonus-intro-title">KINGPIN</h2>
-      <p id="bonus-intro-sub">10 Free Spins</p>
+      <h2 id="bonus-intro-title">VAULT BREACH</h2>
+      <p id="bonus-intro-sub">8 Free Spins</p>
       <small>Tap to start</small>
     </div>
   </div>

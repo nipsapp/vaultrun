@@ -26,7 +26,8 @@ VR.Assets = (function () {
   }
 
   function getSymbolFrame(id, frameIndex, animating) {
-    const frames = symbolFrames[id];
+    const alias = (VR.CONFIG && VR.CONFIG.artAlias && VR.CONFIG.artAlias[id]) || id;
+    const frames = symbolFrames[alias] || symbolFrames[id];
     if (!frames || !frames.length) return null;
     const index = animating ? Math.abs(frameIndex | 0) % frames.length : 0;
     return frames[index] || frames[0] || null;

@@ -1,11 +1,14 @@
 /**
- * RGS / Stake Engine adapter
+ * Stake Engine / RGS adapter (stub → real Stake paths)
  *
- * RGS_MODE=local  → this server is wallet authority
- * RGS_MODE=stake  → debit/credit forwarded to operator RGS (Stake Engine style)
+ * Stake Engine expects:
+ *   POST /wallet/authenticate  { sessionID }
+ *   POST /wallet/play          { sessionID, amount, mode }
+ *   POST /wallet/end-round     { sessionID }
  *
- * Stake Engine / operator endpoints vary by contract. Configure base URL + API key.
- * Calls are structured as industry-common wallet ops: auth/balance/bet/win/refund.
+ * Current demo still uses local wallet when RGS_MODE=local.
+ * When integrating Stake Engine, replace bet/win with play book responses
+ * (math already in static books — do not live-RNG resolve on the operator).
  */
 const config = require("../config");
 
