@@ -12,3 +12,8 @@ _bundle_index.json
 .utmp/
 Library/
 Temp/
+stake/math/
+stake/media/
+stake/front/
+stake/front-manifest.json
+stake/*.zip

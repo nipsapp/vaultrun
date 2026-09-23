@@ -5,6 +5,7 @@ VR.Assets = (function () {
   const BASE = "assets/casino/";
   const symbolFrames = {};
   let ready = false;
+  const bounds = new WeakMap();
 
   function loadImage(path) {
     return new Promise((resolve) => {
@@ -20,7 +21,7 @@ VR.Assets = (function () {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     let response;
-    try { response = await fetch(BASE + "manifest.json", { signal: controller.signal }); }
+    try { response = await fetch(BASE + "manifest-hq.json", { signal: controller.signal }); }
     finally { clearTimeout(timeout); }
     if (!response.ok) throw new Error("Symbol manifest unavailable");
     const manifest = await response.json();
@@ -29,6 +30,9 @@ VR.Assets = (function () {
     onProgress(0);
     await Promise.all(Object.entries(manifest.symbols).map(async ([id, paths]) => {
       symbolFrames[id] = await Promise.all(paths.map(async path => { const image = await loadImage(path); onProgress(++loaded / Math.max(1, total)); return image; }));
+      for (const image of symbolFrames[id]) {
+        if (image && manifest.bounds?.[id]) bounds.set(image, manifest.bounds[id]);
+      }
     }));
     ready = true;
   }
@@ -37,13 +41,15 @@ VR.Assets = (function () {
     const alias = (VR.CONFIG && VR.CONFIG.artAlias && VR.CONFIG.artAlias[id]) || id;
     const frames = symbolFrames[alias] || symbolFrames[id];
     if (!frames || !frames.length) return null;
-    const index = animating ? Math.abs(frameIndex | 0) % frames.length : 0;
+    const idle = alias === "COIN" ? 3 : 0;
+    const index = animating ? (idle + Math.abs(frameIndex | 0)) % frames.length : idle;
     return frames[index] || frames[0] || null;
   }
 
   return {
     init,
     getSymbolFrame,
+    getSymbolBounds: image => bounds.get(image),
     getUi: () => null,
     isReady: () => ready,
     frameCount: (id) => (symbolFrames[(VR.CONFIG.artAlias || {})[id] || id] || []).length,

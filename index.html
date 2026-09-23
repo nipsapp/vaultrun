@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/casino.css" />
   <link rel="stylesheet" href="css/vault-art.css" />
+  <link rel="stylesheet" href="css/polish.css" />
   <link rel="preload" as="image" href="assets/casino/vault-title-v2.webp" />
 </head>
 <body class="is-loading">
@@ -55,29 +56,26 @@
       <p id="status-line" class="status-line">Loading…</p>
     </main>
 
-    <section class="meters">
-      <div class="meter">
-        <span class="label">BALANCE</span>
-        <strong id="bal-val">0.00</strong>
+    <section class="control-deck" aria-label="Bet and spin controls">
+      <div class="meters">
+        <div class="meter"><span class="label">BALANCE</span><strong id="bal-val">0.00</strong></div>
+        <div class="meter win"><span class="label">ROUND WIN</span><strong id="win-val" aria-live="polite">0.00</strong></div>
+        <div class="meter bet-meter">
+          <span class="label">TOTAL BET</span>
+          <div class="bet-stepper">
+            <button id="btn-bet-minus" aria-label="Decrease bet">−</button>
+            <strong id="bet-val">1.00</strong>
+            <button id="btn-bet-plus" aria-label="Increase bet">+</button>
+          </div>
+        </div>
       </div>
-      <div class="meter win">
-        <span class="label">WIN</span>
-        <strong id="win-val">0.00</strong>
-      </div>
-      <div class="meter">
-        <span class="label">BET</span>
-        <strong id="bet-val">1.00</strong>
-      </div>
+      <footer class="controls">
+        <button id="btn-info" class="ctrl ghost" aria-label="Game rules">INFO</button>
+        <button id="btn-buy" class="ctrl accent">BUY<br>FEATURE</button>
+        <button id="btn-auto" class="ctrl ghost"><span id="auto-label">AUTO</span><span id="auto-left"></span></button>
+        <button id="btn-spin" class="spin" aria-label="Spin"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M37 16A15 15 0 1 0 39 29M37 7v11H26"/></svg><span>SPIN</span></button>
+      </footer>
     </section>
-
-    <footer class="controls">
-      <button id="btn-info" class="ctrl ghost">INFO</button>
-      <button id="btn-bet-minus" class="ctrl">−</button>
-      <button id="btn-spin" class="spin" aria-label="Spin">SPIN</button>
-      <button id="btn-bet-plus" class="ctrl">+</button>
-      <button id="btn-buy" class="ctrl accent">BUY</button>
-      <button id="btn-auto" class="ctrl ghost">AUTO <span id="auto-left"></span></button>
-    </footer>
   </div>
 
   <div id="overlay" class="overlay" data-close></div>
@@ -144,21 +142,26 @@
 
     <div class="rules-body">
       <section class="rules-pane active" id="rules-play" role="tabpanel" data-rules-pane="play">
-        <p class="rules-lead">Crack the vault in three moves: <strong>tumble</strong> wins, <strong>collect</strong> chips with keys, then land Circuits to <strong>breach</strong>.</p>
+        <div class="rules-overview" aria-label="Game at a glance">
+          <div><strong>5 × 4</strong><span>REEL GRID</span></div>
+          <div><strong>1,024</strong><span>MAX WAYS</span></div>
+          <div><strong>20,000×</strong><span>MAX WIN</span></div>
+        </div>
+        <p class="rules-lead">Set your total bet with <strong>− / +</strong>, then press <strong>SPIN</strong>. Match symbols from the left, let wins tumble, collect Cash Chips with Keys, and land Circuits to open Vault Breach.</p>
 
         <ol class="rules-steps">
           <li>
             <span class="step-num">1</span>
             <div>
               <strong>Spin the 5×4 grid</strong>
-              <p>Pays are left-to-right <em>ways</em> — matching symbols on adjacent reels from the left. Up to <strong>1,024 ways</strong>.</p>
+              <p>Matching pay symbols on adjacent reels, starting at reel 1, win with <strong>3, 4, or 5</strong> reels. Any position on each reel counts; rows do not have to line up. Multiple matching positions make multiple ways. The Paytable shows values per way, multiplied by your total bet.</p>
             </div>
           </li>
           <li>
             <span class="step-num">2</span>
             <div>
               <strong>Wins tumble</strong>
-              <p>Winning symbols explode. New symbols fall in. Every cascade win steps up the <strong>Breach Mult</strong>:</p>
+              <p>Winning symbols disappear and new symbols drop in. Each new winning cascade advances the <strong>Breach Mult</strong> for subsequent wins in that spin:</p>
               <div class="mult-ladder" aria-label="Breach multiplier ladder">
                 <span>1×</span><span>2×</span><span>3×</span><span>5×</span><span>8×</span><span class="peak">12×</span>
               </div>
@@ -171,14 +174,14 @@
               <strong>Keys collect Cash Chips</strong>
               <p>When tumbles stop, each <strong>Key</strong> collects every visible Cash Chip:</p>
               <p class="formula">Collect = bet × (sum of chip faces) × (number of keys)</p>
-              <p>You need at least one Key and one Chip. Two or more Keys can also nudge Breach Mult / upgrade the Vault Gauge in free spins.</p>
+              <p>You need at least one Key and one Chip. For example, at a 2.00 bet, a 1× Chip and a 2× Chip collected by two Keys pay <strong>12.00</strong>. Two or more Keys can also advance Breach Mult and upgrade the Vault Gauge during free spins.</p>
             </div>
           </li>
           <li>
             <span class="step-num">4</span>
             <div>
               <strong>3+ Circuits → Vault Breach</strong>
-              <p>Land three or more Circuit scatters anywhere to start free spins. Scatter count sets spin count and starting Vault Gauge.</p>
+              <p>Land three or more Circuit scatters anywhere on the settled board to start free spins. The number of Circuits determines your starting spin count and Vault Gauge. See <strong>Vault Breach</strong> for the full feature rules.</p>
             </div>
           </li>
         </ol>
@@ -188,28 +191,28 @@
         <p class="rules-lead">Special symbols do the heavy lifting. Pay symbols are listed under Paytable.</p>
         <div class="symbol-guide">
           <article class="sym-card">
-            <img src="assets/casino/symbols/WILD/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <img src="assets/casino/symbols-hq/WILD/00.webp" alt="" width="72" height="72" loading="lazy" />
             <div>
               <h3>Drill Wild</h3>
               <p>Substitutes for all pay symbols (not Key, Chip, or Circuit). Each Drill has its own mult: <strong>2× / 3× / 5× / 10×</strong>. Wild mults on a win multiply together (capped at <strong>50×</strong>) before Breach Mult.</p>
             </div>
           </article>
           <article class="sym-card">
-            <img src="assets/casino/symbols/FREESPIN/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <img src="assets/casino/symbols-hq/FREESPIN/00.webp" alt="" width="72" height="72" loading="lazy" />
             <div>
               <h3>Key</h3>
               <p>Does not pay ways. After cascades, every Key collects all Cash Chip values on the board.</p>
             </div>
           </article>
           <article class="sym-card">
-            <img src="assets/casino/symbols/COIN/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <img src="assets/casino/vault-cash-chip-v2.webp" alt="" width="72" height="72" loading="lazy" />
             <div>
               <h3>Cash Chip</h3>
               <p>Face values × bet: <strong>0.5 · 1 · 2 · 5 · 10 · 25 · 50 · 100</strong>. Collected only when Keys are present.</p>
             </div>
           </article>
           <article class="sym-card">
-            <img src="assets/casino/symbols/SCAT/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <img src="assets/casino/symbols-hq/SCAT/00.webp" alt="" width="72" height="72" loading="lazy" />
             <div>
               <h3>Circuit Scatter</h3>
               <p><strong>3+</strong> anywhere triggers Vault Breach free spins. During free spins, 3+ Circuits add <strong>+2 spins</strong>.</p>
@@ -219,7 +222,7 @@
       </section>
 
       <section class="rules-pane" id="rules-pays" role="tabpanel" data-rules-pane="pays" hidden>
-        <p class="rules-lead">Pays are × your total bet × number of ways × wild mult × Breach Mult. Lengths below are 3 / 4 / 5 of a kind.</p>
+        <p class="rules-lead">Each value below is a multiplier of your <strong>total bet, per way</strong>. A win pays: bet × table value × number of ways × Drill multiplier × Breach Mult. Drill multipliers multiply together, up to 50×. Values apply to 3, 4, or 5 adjacent reels from the left.</p>
         <div class="pay-table-wrap">
           <table class="pay-table" id="rules-pay-table">
             <thead>
@@ -235,7 +238,7 @@
             </tbody>
           </table>
         </div>
-        <p class="rules-note">High symbols (Crown → Lens) pay more. Lows are Ace–Jack.</p>
+        <p class="rules-note">Gold tiles and the Ruby Diamond are high symbols. Blue spades and clubs are low symbols. Drill Wilds substitute for any of these nine symbols.</p>
       </section>
 
       <section class="rules-pane" id="rules-feature" role="tabpanel" data-rules-pane="feature" hidden>
@@ -313,11 +316,11 @@
       <section class="rules-pane" id="rules-limits" role="tabpanel" data-rules-pane="limits" hidden>
         <ul class="limits-list">
           <li><strong>Max win</strong> — 20,000× your bet. The round ends if the cap is hit.</li>
-          <li><strong>RTP target</strong> — 96% across long-run play (base + features).</li>
+          <li><strong>RTP</strong> — expected return is calculated over many plays (target ~96%).</li>
           <li><strong>Grid</strong> — 5 reels × 4 rows · left-to-right ways (3–5 of a kind).</li>
           <li><strong>Cascade cap</strong> — up to 20 tumbles per paid spin.</li>
-          <li><strong>Malfunction</strong> — voids all pays and plays. Incomplete rounds may be restored or voided by the operator.</li>
         </ul>
+        <p class="rules-disclaimer">Malfunction voids all wins and plays. A consistent internet connection is required. In the event of a disconnection, reload the game to finish any uncompleted rounds. The expected return is calculated over many plays. The game display is not representative of any physical device and is for illustrative purposes only. Winnings are settled according to the amount received from the Remote Game Server and not from events within the web browser. TM and © 2026 Engine.</p>
         <p class="rules-footnote">Vault Run · Circuit Breach v2.0.0 · Play responsibly.</p>
       </section>
     </div>
@@ -339,7 +342,7 @@
     <div class="win-card">
       <p id="win-banner-title">BIG WIN</p>
       <p id="win-banner-amount">0.00</p>
-      <small>Tap to continue</small>
+      <small>Spin available after the celebration</small>
     </div>
   </div>
 
@@ -348,7 +351,7 @@
       <p class="eyebrow">FEATURE UNLOCKED</p>
       <h2 id="bonus-intro-title">VAULT BREACH</h2>
       <p id="bonus-intro-sub">8 Free Spins</p>
-      <small>Tap to start</small>
+      <small>Free spins begin shortly</small>
     </div>
   </div>
 
@@ -362,6 +365,7 @@
   <script src="js/audio.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/stakeRgs.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

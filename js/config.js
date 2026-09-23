@@ -36,15 +36,15 @@ VR.CONFIG = {
   chipWeights: [30, 28, 18, 12, 6, 3.5, 1.8, 0.7],
 
   symbols: {
-    H1: { id: "H1", name: "Crown", tier: "high", color: "#fbbf24" },
-    H2: { id: "H2", name: "Safe", tier: "high", color: "#7dd3fc" },
-    H3: { id: "H3", name: "Chipstack", tier: "high", color: "#34d399" },
-    H4: { id: "H4", name: "Cuff", tier: "high", color: "#f87171" },
-    H5: { id: "H5", name: "Lens", tier: "high", color: "#c084fc" },
-    L1: { id: "L1", name: "Ace", tier: "low", color: "#94a3b8" },
-    L2: { id: "L2", name: "King", tier: "low", color: "#a78bfa" },
-    L3: { id: "L3", name: "Queen", tier: "low", color: "#67e8f9" },
-    L4: { id: "L4", name: "Jack", tier: "low", color: "#a3e635" },
+    H1: { id: "H1", name: "Lambda Tile", tier: "high", color: "#fbbf24" },
+    H2: { id: "H2", name: "Beta Tile", tier: "high", color: "#7dd3fc" },
+    H3: { id: "H3", name: "Psi Tile", tier: "high", color: "#34d399" },
+    H4: { id: "H4", name: "Sigma Tile", tier: "high", color: "#f87171" },
+    H5: { id: "H5", name: "Ruby Diamond", tier: "high", color: "#c084fc" },
+    L1: { id: "L1", name: "Spade I", tier: "low", color: "#94a3b8" },
+    L2: { id: "L2", name: "Club I", tier: "low", color: "#a78bfa" },
+    L3: { id: "L3", name: "Spade II", tier: "low", color: "#67e8f9" },
+    L4: { id: "L4", name: "Club II", tier: "low", color: "#a3e635" },
     WILD: { id: "WILD", name: "Drill", tier: "special", color: "#fde68a" },
     KEY: { id: "KEY", name: "Key", tier: "special", color: "#fbbf24" },
     CHIP: { id: "CHIP", name: "Cash Chip", tier: "special", color: "#facc15" },
@@ -52,8 +52,7 @@ VR.CONFIG = {
   },
   artPack: "MK Antique Casino Bundle — Greek",
   artAlias: {
-    KEY: "FREESPIN",
-    CHIP: "COIN"
+    KEY: "FREESPIN"
   },
 
   // Pays × total bet for ways length 3–5

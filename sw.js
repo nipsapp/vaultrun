@@ -1,14 +1,17 @@
 /* Vault Run service worker — offline shell for PWA / store WebView */
-const CACHE = "vaultrun-v1.6.0-rules";
+const CACHE = "vaultrun-v1.9-celebration";
 const ASSETS = [
   "./",
   "./index.html",
   "./css/main.css",
   "./css/casino.css",
   "./css/vault-art.css",
+  "./css/polish.css",
+  "./assets/casino/manifest-hq.json",
   "./js/loading.js",
   "./assets/casino/vault-title-v2.webp",
   "./assets/casino/vault-frame-v2.webp",
+  "./assets/casino/vault-cash-chip-v2.webp",
   "./js/config.js",
   "./js/engine.js",
   "./js/assets.js",

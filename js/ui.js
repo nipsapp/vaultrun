@@ -16,7 +16,7 @@ VR.UI = (function () {
 
   function artPath(id) {
     const alias = (VR.CONFIG.artAlias && VR.CONFIG.artAlias[id]) || id;
-    return "assets/casino/symbols/" + alias + "/00.webp";
+    return "assets/casino/symbols-hq/" + alias + "/00.webp";
   }
 
   function fillPayTable() {
@@ -67,6 +67,8 @@ VR.UI = (function () {
       pane.hidden = !on;
     });
     if (id === "pays") fillPayTable();
+    const body = $("#panel-info .rules-body");
+    if (body) body.scrollTop = 0;
   }
 
   function bindRulesTabs() {
@@ -111,7 +113,9 @@ VR.UI = (function () {
     bindRulesTabs();
 
     document.addEventListener("keydown", (e) => {
-      if (e.code === "Space") {
+      if (e.code === "Space" && !e.repeat && state.ready && !state.busy &&
+          !document.querySelector('.panel.open, .win-banner.show, .bonus-intro.show') &&
+          !e.target.closest('button, input, select, textarea, [contenteditable]')) {
         e.preventDefault();
         handlers.spin();
       }
@@ -123,16 +127,21 @@ VR.UI = (function () {
     closePanels();
     const el = $("#panel-" + id);
     if (el) {
+      openPanel.trigger = document.activeElement;
       el.classList.add("open");
       $("#overlay").classList.add("open");
       if (id === "info") setRulesTab("play");
+      const closeButton = el.querySelector("[data-close]");
+      if (closeButton) requestAnimationFrame(() => closeButton.focus({ preventScroll: true }));
     }
   }
 
   function closePanels() {
+    const wasOpen = !!document.querySelector(".panel.open");
     $$(".panel").forEach((p) => p.classList.remove("open"));
     $("#overlay").classList.remove("open");
-    $("#win-banner").classList.remove("show");
+    if (wasOpen && openPanel.trigger?.isConnected) openPanel.trigger.focus({ preventScroll: true });
+
   }
 
   function refresh(state) {
@@ -143,6 +152,13 @@ VR.UI = (function () {
     const spinBtn = $("#btn-spin");
     spinBtn.classList.toggle("busy", state.busy);
     spinBtn.disabled = state.busy;
+    $("#btn-bet-minus").disabled = state.busy || state.betIndex <= 0;
+    $("#btn-bet-plus").disabled = state.busy || state.betIndex >= VR.CONFIG.betSteps.length - 1;
+    $("#btn-buy").disabled = state.busy;
+    $("#btn-auto").disabled = state.busy && !state.autoLeft;
+    $("#btn-auto").setAttribute('aria-label', state.autoLeft > 0 ? 'Stop autoplay' : 'Autoplay');
+    const autoLabel = $("#auto-label");
+    if (autoLabel) autoLabel.textContent = state.autoLeft > 0 ? 'STOP' : 'AUTO';
     spinBtn.setAttribute("aria-busy", String(state.busy));
     spinBtn.classList.toggle("bonus", state.inBonus);
     $("#btn-auto").classList.toggle("active", state.autoLeft > 0);
@@ -176,6 +192,36 @@ VR.UI = (function () {
     toast._t = setTimeout(() => el.classList.remove("show"), 2000);
   }
 
+  async function finishEffects(el) {
+    // Flush the class change, then await finite Web Animations / CSS transitions.
+    void el.offsetWidth;
+    const effects = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
+    await Promise.all(effects.filter(a => a.effect?.getTiming().iterations !== Infinity)
+      .map(a => a.finished.catch(() => {})));
+  }
+
+  function hold(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function countAmount(el, amount) {
+    if (typeof requestAnimationFrame !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = money(amount);
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      let start;
+      function frame(now) {
+        if (start === undefined) start = now;
+        const t = Math.min(1, (now - start) / 1000);
+        el.textContent = money(amount * (1 - Math.pow(1 - t, 3)));
+        if (t < 1) requestAnimationFrame(frame);
+        else { el.textContent = money(amount); resolve(); }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
   function showWinBanner(amount, bet, kind) {
     const el = $("#win-banner");
     const mult = amount / Math.max(bet, 0.0001);
@@ -185,20 +231,13 @@ VR.UI = (function () {
     else if (mult >= 20) title = "MEGA WIN";
     else if (mult >= 8) title = "BIG WIN";
     $("#win-banner-title").textContent = title;
-    $("#win-banner-amount").textContent = money(amount);
+    const counting = countAmount($("#win-banner-amount"), amount);
     el.classList.add("show");
-    return new Promise((res) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        el.classList.remove("show");
-        el.removeEventListener("click", finish);
-        res();
-      };
-      el.addEventListener("click", finish);
-      setTimeout(finish, mult >= 8 ? 2200 : 1200);
-    });
+    return (async () => {
+      await Promise.all([counting, finishEffects(el), hold(mult >= 8 ? 2600 : 1600)]);
+      el.classList.remove("show");
+      await finishEffects(el);
+    })();
   }
 
   function showBonusIntro(bonus) {
@@ -210,18 +249,11 @@ VR.UI = (function () {
     $("#bonus-intro-sub").textContent =
       spins + " Free Spins  ·  Vault Gauge " + gauge;
     el.classList.add("show");
-    return new Promise((res) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        el.classList.remove("show");
-        el.removeEventListener("click", finish);
-        res();
-      };
-      el.addEventListener("click", finish);
-      setTimeout(finish, 2200);
-    });
+    return (async () => {
+      await Promise.all([finishEffects(el), hold(2400)]);
+      el.classList.remove("show");
+      await finishEffects(el);
+    })();
   }
 
   function setStatus(text) {

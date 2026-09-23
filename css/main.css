@@ -383,6 +383,16 @@ body.art-ready .logo {
   color: var(--muted);
   text-align: center;
 }
+.rules-disclaimer {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(188, 132, 62, 0.4);
+  background: rgba(2, 6, 23, 0.45);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .formula {
   margin: 8px 0;
   padding: 10px 12px;

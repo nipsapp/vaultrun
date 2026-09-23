@@ -31,8 +31,7 @@ VR.Loading = (() => {
       screen.classList.add('is-leaving');
       screen.inert = true;
       document.getElementById('btn-spin').focus({ preventScroll: true });
-      setTimeout(() => { screen.hidden = true; }, 650);
-      resolve();
+      setTimeout(() => { screen.hidden = true; resolve(); }, 650);
     }, { once: true }));
   }
   return { progress, finish };

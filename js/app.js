@@ -22,6 +22,7 @@ VR.App = (function () {
     bonusWin: 0,
     grid: null,
     serverMode: false,
+    stakeMode: false,
     breachMult: 1,
     gauge: 0
   };
@@ -45,34 +46,48 @@ VR.App = (function () {
     VR.Loading?.progress(88, "Preparing your session…");
 
     try {
-      const up = await Promise.race([
-        VR.API.probe(),
-        new Promise((r) => setTimeout(() => r(false), 1500))
-      ]);
-      if (up) {
-        const session = await Promise.race([
-          VR.API.ensureAuth(),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("auth timeout")), 4000))
-        ]);
+      if (VR.StakeRGS && VR.StakeRGS.enabled()) {
+        const session = await VR.StakeRGS.authenticate();
         state.serverMode = true;
-        if (session && session.balance != null) {
-          state.balance = session.balance;
-        } else {
-          try {
-            const st = await Promise.race([
-              VR.API.state(),
-              new Promise((_, rej) => setTimeout(() => rej(new Error("state timeout")), 3000))
-            ]);
-            state.balance = st.balance;
-          } catch (_) {
-            /* keep startBalance */
-          }
+        state.stakeMode = true;
+        if (session.balance != null) state.balance = session.balance;
+        if (session.betLevels && session.betLevels.length) {
+          VR.CONFIG.betSteps = session.betLevels;
+          state.betIndex = Math.min(state.betIndex, VR.CONFIG.betSteps.length - 1);
+          state.bet = betValue();
         }
-        VR.UI.toast("Connected to game server");
+        VR.UI.toast("Connected to Stake RGS");
+      } else {
+        const up = await Promise.race([
+          VR.API.probe(),
+          new Promise((r) => setTimeout(() => r(false), 1500))
+        ]);
+        if (up) {
+          const session = await Promise.race([
+            VR.API.ensureAuth(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("auth timeout")), 4000))
+          ]);
+          state.serverMode = true;
+          if (session && session.balance != null) {
+            state.balance = session.balance;
+          } else {
+            try {
+              const st = await Promise.race([
+                VR.API.state(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error("state timeout")), 3000))
+              ]);
+              state.balance = st.balance;
+            } catch (_) {
+              /* keep startBalance */
+            }
+          }
+          VR.UI.toast("Connected to game server");
+        }
       }
     } catch (e) {
       console.warn("Auth failed, local mode", e);
       state.serverMode = false;
+      state.stakeMode = false;
     }
 
     state.grid = VR.Engine.createEmptyGrid();
@@ -86,7 +101,10 @@ VR.App = (function () {
     VR.UI.bind(state, {
       spin: () => requestSpin(),
       bet: (dir) => changeBet(dir),
-      toggleAuto: () => VR.UI.openPanel("auto"),
+      toggleAuto: () => {
+        if (state.autoLeft > 0) { state.autoLeft = 0; VR.UI.refresh(state); }
+        else if (!state.busy) VR.UI.openPanel("auto");
+      },
       setAuto: (n) => {
         if (state.busy) return;
         state.autoLeft = n;
@@ -104,9 +122,11 @@ VR.App = (function () {
 
     VR.UI.refresh(state);
     VR.UI.setStatus(
-      state.serverMode
-        ? "Online · Circuit Breach · server RNG"
-        : "Offline demo · Circuit Breach local RNG"
+      state.stakeMode
+        ? "Stake RGS · Circuit Breach"
+        : state.serverMode
+          ? "Online · Circuit Breach · server RNG"
+          : "Offline demo · Circuit Breach local RNG"
     );
 
     setInterval(() => {
@@ -117,6 +137,7 @@ VR.App = (function () {
 
     if (VR.Loading) await VR.Loading.finish();
     state.ready = true;
+    if (VR.StakeRGS && VR.StakeRGS.applySocialCopy) VR.StakeRGS.applySocialCopy();
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
@@ -135,9 +156,30 @@ VR.App = (function () {
     return state.balance >= cost - 0.001;
   }
 
+  // One owner holds the input lock through playback, settlement and autoplay gaps.
   async function requestSpin(opts) {
-    opts = opts || {};
     if (state.busy || !state.ready) return;
+    state.busy = true;
+    VR.UI.refresh(state);
+    try {
+      do {
+        await playRound(opts);
+        if (state.autoLeft > 0) state.autoLeft--;
+        VR.UI.refresh(state);
+        if (state.autoLeft <= 0) break;
+        await wait(650);
+        if (state.autoLeft <= 0) break;
+        opts = undefined;
+      } while (state.autoLeft > 0);
+    } finally {
+      state.busy = false;
+      VR.UI.refresh(state);
+      VR.UI.setStatus("Ready");
+    }
+  }
+
+  async function playRound(opts) {
+    opts = opts || {};
     VR.Audio.unlock();
 
     const mode = opts.mode || "base";
@@ -162,7 +204,12 @@ VR.App = (function () {
       VR.Audio.spin();
 
       let resultPromise;
-      if (state.serverMode) {
+      if (state.stakeMode) {
+        resultPromise = VR.StakeRGS.play({ amountDisplay: state.bet, mode }).then((res) => {
+          state.balance = res.balance;
+          return res.result;
+        });
+      } else if (state.serverMode) {
         resultPromise = VR.API.spin({ bet: state.bet, mode,
           forceBonus: mode !== "base" ? mode : null
         }).then(res => {
@@ -174,34 +221,32 @@ VR.App = (function () {
         VR.UI.refresh(state);
         resultPromise = Promise.resolve(VR.Engine.playSpin({ bet: state.bet, mode }));
       }
-      await VR.Render.animateSpin(state.grid, resultPromise.then(result => result.steps[0].grid), 2100,
+      await VR.Render.animateSpin(state.grid, resultPromise.then(result => (result.steps[0] && result.steps[0].grid) || result.grid), 2100,
         { onReelStopped: c => VR.Audio.reelStop(c) });
       const result = await resultPromise;
-      state.grid = result.steps[0].grid;
-      await playTimeline(result, { skipWallet: state.serverMode });
+      state.grid = (result.steps[0] && result.steps[0].grid) || result.grid;
+      await playTimeline(result, { skipWallet: state.serverMode || state.stakeMode });
+      if (state.stakeMode && result.totalWin > 0) {
+        const ended = await VR.StakeRGS.endRound();
+        if (ended && ended.balance != null) state.balance = ended.balance;
+      }
     } catch (err) {
       state.autoLeft = 0;
       console.error(err);
       VR.UI.toast(err.message || "Spin failed");
-      if (err.status === 401) state.serverMode = false;
+      if (err.status === 401) {
+        state.serverMode = false;
+        state.stakeMode = false;
+      }
     } finally {
       VR.Audio.cancelSpin();
       VR.Render.clearFlash();
       VR.Render.clearAnim();
-      state.busy = false;
       state.inBonus = false;
       VR.UI.refresh(state);
       VR.UI.setStatus("Ready");
     }
 
-    if (state.autoLeft > 0) {
-      state.autoLeft -= 1;
-      VR.UI.refresh(state);
-      if (state.autoLeft > 0) {
-        await wait(520);
-        requestSpin();
-      }
-    }
   }
 
   async function playTimeline(result, flags) {
@@ -302,13 +347,16 @@ VR.App = (function () {
       state.balance = +(state.balance + result.totalWin).toFixed(2);
     }
 
+    VR.UI.refresh(state);
     if (result.totalWin > 0) {
       const mult = result.totalWin / state.bet;
-      if (mult >= 8 || result.hitCap) {
+      if ((mult >= 8 || result.hitCap) && !result.fsTotal) {
         VR.Audio.bigWin();
         await VR.UI.showWinBanner(result.totalWin, state.bet, result.fsTotal > 0 ? "bonus" : "base");
       }
     }
+    // A complete settled board remains readable before another spin is allowed.
+    await wait(result.totalWin > 0 ? 600 : 280);
   }
 
   function buyFeature(id) {

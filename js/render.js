@@ -49,9 +49,13 @@ VR.Render = (function () {
       canvas.style.height = h + "px";
       ctx = canvas.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
     } else if (!ctx) {
       ctx = canvas.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
     }
     const cols = VR.CONFIG.reels;
     const rows = boardRows;
@@ -103,7 +107,8 @@ VR.Render = (function () {
     const p = (padRatio == null ? 0.08 : padRatio) * Math.min(w, h);
     const aw = w - p * 2;
     const ah = h - p * 2;
-    const ir = img.width / img.height;
+    const crop = VR.Assets.getSymbolBounds?.(img) || [0, 0, img.width, img.height];
+    const ir = crop[2] / crop[3];
     const tr = aw / ah;
     let dw, dh;
     if (ir > tr) {
@@ -113,7 +118,7 @@ VR.Render = (function () {
       dh = ah;
       dw = ah * ir;
     }
-    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    ctx.drawImage(img, ...crop, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
     return true;
   }
 
@@ -147,11 +152,11 @@ VR.Render = (function () {
     let frameIndex = 0;
     if (animating) {
       const fc = Math.max(1, VR.Assets.frameCount(id));
-      frameIndex = Math.floor(((performance.now() - animCells.get(key).start) / 95) % fc);
+      frameIndex = Math.min(fc - 1, Math.floor((performance.now() - animCells.get(key).start) / 65));
     }
 
     const img = VR.Assets.getSymbolFrame(id, frameIndex, animating);
-    const drawn = drawImageContain(img, x, y, w, h, 0.06);
+    const drawn = drawImageContain(img, x, y, w, h, 0.025);
 
     if (!drawn) {
       // fallback procedural
@@ -170,14 +175,31 @@ VR.Render = (function () {
       ctx.stroke();
     }
 
-    if ((id === "WILD" && extra && extra.mult) || (id === "CHIP" && extra && extra.chip != null)) {
+    if (id === "CHIP" && extra && extra.chip != null) {
+      const label = String(extra.chip) + "\u00d7";
+      ctx.save();
+      ctx.font = `900 ${Math.max(10, Math.floor(s * (label.length > 3 ? 0.235 : 0.27)))}px "Trebuchet MS", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(2, s * 0.022);
+      ctx.strokeStyle = "#321842";
+      ctx.fillStyle = "#fff1bc";
+      ctx.shadowColor = "rgba(96, 219, 237, 0.55)";
+      ctx.shadowBlur = Math.max(3, s * 0.055);
+      const cx = x + w / 2, cy = y + h / 2;
+      const maxWidth = Math.min(w, h) * 0.58;
+      ctx.strokeText(label, cx, cy, maxWidth);
+      ctx.fillText(label, cx, cy, maxWidth);
+      ctx.restore();
+    } else if (id === "WILD" && extra && extra.mult) {
       ctx.font = `900 ${Math.floor(s * 0.22)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = 3;
       ctx.strokeStyle = "#000";
       ctx.fillStyle = "#fde68a";
-      const t = (id === "CHIP" ? extra.chip : extra.mult) + "×";
+      const t = extra.mult + "\u00d7";
       ctx.strokeText(t, x + w / 2, y + h * 0.78);
       ctx.fillText(t, x + w / 2, y + h * 0.78);
     }
@@ -218,6 +240,9 @@ VR.Render = (function () {
     const h = canvas.height / dpr;
     animTick++;
 
+    // Leave the cabinet lighting visible beneath the symbols. Clear first so
+    // translucent fills never accumulate across animation frames.
+    ctx.clearRect(0, 0, w, h);
     // background art
     const bg = VR.Assets.getUi("bg");
     if (bg) {
@@ -225,7 +250,7 @@ VR.Render = (function () {
       ctx.fillStyle = "rgba(2,6,23,0.35)";
       ctx.fillRect(0, 0, w, h);
     } else {
-      ctx.fillStyle = "#0b1224";
+      ctx.fillStyle = "rgba(8, 13, 29, 0.32)";
       ctx.fillRect(0, 0, w, h);
     }
 
@@ -256,7 +281,7 @@ VR.Render = (function () {
         ctx.save();
         if (flashCells.size && !flashCells.has(key)) ctx.globalAlpha = 0.32;
         if (animCells.has(key)) {
-          const pulse = 1 + 0.045 * Math.sin((performance.now() - revealStart) / 150);
+          const pulse = 1 + 0.045 * Math.sin(Math.min(1, (performance.now() - revealStart) / 900) * Math.PI);
           ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
           ctx.scale(pulse, pulse);
           ctx.translate(-rect.x - rect.w / 2, -rect.y - rect.h / 2);
@@ -351,7 +376,7 @@ VR.Render = (function () {
             // Directional trails use the same sprite: no costly per-frame blur filters.
             const blur = Math.min(1, Math.max(0, velocity / speed));
             if (blur > 0.15) {
-              ctx.globalAlpha = 0.12 * blur;
+              ctx.globalAlpha = 0.065 * blur;
               drawSymbol(cell.id, rect.x, y - blur * cellH * 0.16, cellW, cellH, cell);
               drawSymbol(cell.id, rect.x, y + blur * cellH * 0.16, cellW, cellH, cell);
             }
@@ -387,8 +412,11 @@ VR.Render = (function () {
           ctx.beginPath(); ctx.rect(rect.x, pad, cellW, rows * (cellH + pad) - pad); ctx.clip();
           col.forEach((cell, r) => {
             const t = Math.max(0, Math.min(1, (now - start - c * 22) / (duration - 100)));
-            const fall = 1 - Math.pow(1 - t, 3);
-            const y = pad + (starts[c][r] + (r - starts[c][r]) * fall) * (cellH + pad);
+            // Accelerate under gravity, then absorb the landing over the final 20%.
+            const u = Math.min(1, t / 0.8);
+            const fall = u * u * (3 - 2 * u);
+            const settle = t > 0.8 ? Math.sin((t - 0.8) / 0.2 * Math.PI) * 0.035 : 0;
+            const y = pad + (starts[c][r] + (r - starts[c][r]) * fall + (starts[c][r] !== r ? settle : 0)) * (cellH + pad);
             if (cell) drawSymbol(cell.id, rect.x, y, cellW, cellH, cell);
           });
           ctx.restore();
@@ -471,7 +499,8 @@ VR.Render = (function () {
     emit('WinRevealStarted');
     animateCells(positions);
     const start = performance.now();
-    const ms = duration || 900;
+    const longest = Math.max(1, ...positions.map(p => VR.Assets.frameCount(grid[p.c]?.[p.r]?.id)));
+    const ms = Math.max(duration || 900, longest * 65 + 160);
     return new Promise((resolve) => {
       function frame(now) {
         drawFrame(grid);

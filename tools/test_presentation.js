@@ -59,7 +59,7 @@ async function rendererTest(hz, delayed = false) {
   assert.deepEqual(drawn, Array.from(from.flat(), cell => cell.id), 'failure restores previous board');
   console.log(`OK renderer ${hz} Hz${delayed ? ' / delayed response' : ''}`);
 }
-async function timelineTest(mode, auto = 0) {
+async function timelineTest(mode, auto = 0, stopInGap = false) {
   const { VR, scope } = engine();
   let handlers, lastDisplayed, lastResolved, reveals = 0, tumbles = 0, paid = 0;
   VR.Engine.seed(7);
@@ -94,7 +94,16 @@ async function timelineTest(mode, auto = 0) {
   }, { get: (obj, key) => obj[key] || (async () => {}) });
   Object.assign(scope, {
     document: { body: { classList: { add() {} }, addEventListener() {} }, getElementById() {}, addEventListener() {} },
-    navigator: {}, setInterval() {}, setTimeout(cb, ms) { if (ms < 1000) queueMicrotask(cb); }
+    navigator: {}, setInterval() {}, setTimeout(cb, ms) {
+      if (ms === 650) {
+        assert.equal(VR.App.state.busy, true, 'autoplay gap retains input lock');
+        const before = paid;
+        handlers.spin();
+        assert.equal(paid, before, 'manual input cannot race an autoplay gap');
+        if (stopInGap) handlers.toggleAuto();
+      }
+      if (ms < 1000) queueMicrotask(cb);
+    }
   });
   vm.runInContext(source('js/app.js'), scope);
   await VR.App.init();
@@ -103,16 +112,19 @@ async function timelineTest(mode, auto = 0) {
   else handlers.buy(mode);
   for (let i = 0; i < 10000 && (VR.App.state.busy || VR.App.state.autoLeft); i++) await Promise.resolve();
   assert.equal(VR.App.state.busy, false, 'timeline completes');
-  assert.equal(paid, auto || 1, 'autoplay runs exactly requested number');
+  assert.equal(paid, stopInGap ? 1 : auto || 1, 'autoplay runs exactly requested number');
   assert.equal(VR.App.state.lastWin, lastResolved.totalWin);
   assert.equal(JSON.stringify(VR.App.state.grid), JSON.stringify(lastResolved.grid));
-  if (mode !== 'base' || auto) { assert.ok(reveals > 0); assert.ok(tumbles > 0); }
+  if (!stopInGap && (mode !== 'base' || auto)) { assert.ok(reveals > 0); assert.ok(tumbles > 0); }
   console.log(`OK timeline ${mode}, ${paid} spin(s), ${reveals} win reveals / ${tumbles} tumbles`);
 }
 (async () => {
   for (const hz of [60, 90, 120]) await rendererTest(hz);
   await rendererTest(60, true);
   await timelineTest('base', 10);
+  await timelineTest('base', 10, true);
+  await overlayTest();
+  await autoplayCelebrationTest();
   for (const mode of ['bonus', 'bonus_max', 'super']) await timelineTest(mode);
   const { playSpinWithRng } = require('../server/src/game/engineBridge');
   let calls = 0;
@@ -129,3 +141,70 @@ async function timelineTest(mode, auto = 0) {
 })().catch(err => { console.error(err); process.exitCode = 1; });
 
 
+
+async function overlayTest() {
+  let releaseEntrance, releaseExit, releaseHold, shown = false, complete = false;
+  const entrance = new Promise(r => { releaseEntrance = r; });
+  const exit = new Promise(r => { releaseExit = r; });
+  const el = {
+    classList: { add() { shown = true; }, remove() { shown = false; } },
+    getAnimations() { return [{ effect: { getTiming: () => ({ iterations: 1 }) }, finished: shown ? entrance : exit }]; },
+    offsetWidth: 200
+  };
+  const VR = {};
+  const scope = { VR, window: { VR }, document: { querySelector: () => el }, setTimeout(cb) { releaseHold = cb; } };
+  vm.createContext(scope);
+  vm.runInContext(source('js/ui.js'), scope);
+  const result = VR.UI.showWinBanner(20, 1, 'base').then(() => { complete = true; });
+  releaseEntrance();
+  await Promise.resolve();
+  assert.equal(shown, true, 'celebration stays visible until its hold finishes');
+  assert.equal(complete, false, 'entrance alone cannot settle the celebration');
+  releaseHold();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(shown, false, 'overlay begins exiting');
+  assert.equal(complete, false, 'playback waits for exit animation');
+  releaseExit();
+  await result;
+  assert.equal(complete, true);
+  console.log('OK overlay entrance and exit settlement');
+}
+
+async function autoplayCelebrationTest() {
+  const { VR, scope } = engine();
+  const grid = VR.Engine.createEmptyGrid();
+  let handlers, spins = 0, banners = 0, releaseFirstBanner;
+  VR.Engine.playSpin = () => {
+    if (handlers) spins++;
+    return { grid, steps: [{ type: 'spin', grid }, { type: 'pay' }], totalWin: 20 };
+  };
+  VR.Assets = { init: async () => {} };
+  VR.API = { probe: async () => false };
+  VR.Audio = new Proxy({}, { get: () => () => {} });
+  VR.Render = new Proxy({}, { get: (_, key) => key === 'animateSpin' ? async () => {} : () => {} });
+  VR.UI = new Proxy({
+    bind(state, bound) { handlers = bound; },
+    money: n => String(n),
+    showWinBanner() {
+      banners++;
+      return banners === 1 ? new Promise(resolve => { releaseFirstBanner = resolve; }) : Promise.resolve();
+    }
+  }, { get: (obj, key) => obj[key] || (() => {}) });
+  Object.assign(scope, {
+    document: { body: { classList: { add() {} }, addEventListener() {} }, getElementById() {}, addEventListener() {} },
+    navigator: {}, setInterval() {}, setTimeout(cb, ms) { if (ms < 1000) queueMicrotask(cb); }
+  });
+  vm.runInContext(source('js/app.js'), scope);
+  await VR.App.init();
+  handlers.setAuto(2);
+  for (let i = 0; i < 100 && !releaseFirstBanner; i++) await Promise.resolve();
+  assert.equal(spins, 1);
+  assert.equal(VR.App.state.busy, true);
+  for (let i = 0; i < 100; i++) await Promise.resolve();
+  assert.equal(spins, 1, 'autoplay cannot spin while a win banner is still active');
+  releaseFirstBanner();
+  for (let i = 0; i < 300 && VR.App.state.busy; i++) await Promise.resolve();
+  assert.equal(spins, 2, 'autoplay resumes after celebration settles');
+  assert.equal(VR.App.state.busy, false);
+  console.log('OK autoplay waits for win celebration');
+}

@@ -1,0 +1,112 @@
+/* Compact instrument panel; keep the reels as the primary visual focus. */
+#app{grid-template-rows:auto minmax(0,1fr) auto;max-width:1040px;gap:12px;padding-bottom:max(16px,var(--safe-b))}
+#app:has(.bonus-bar.show){grid-template-rows:auto auto minmax(0,1fr) auto}
+html,body{background:linear-gradient(#10051f77,#090818a8),url('../assets/casino/casino-bg.webp') center/cover no-repeat,#100321}
+.game-title{width:clamp(205px,27vw,290px)}.topbar{min-height:58px}.stage-heading{font-size:10px;letter-spacing:.18em;opacity:.85}.status-line{font-weight:500;letter-spacing:.04em;color:#cbb9d1;margin-top:3px}
+.reel-frame{--rail:clamp(28px,4vw,48px);--crown:calc(var(--rail)*1.15);--base:calc(var(--rail)*1.42);width:min(100%,calc((100dvh - 210px)*1.5));filter:drop-shadow(0 12px 16px #0008)}
+.vault-surround{display:none}.reel-frame::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;border-style:solid;border-width:var(--crown) var(--rail) var(--base);border-image:url('../assets/casino/vault-frame-v2.webp') 160 140 200 140 stretch}
+.reel-window{inset:calc(var(--crown) - 2px) calc(var(--rail) - 2px) calc(var(--base) - 2px);border-radius:6px;box-shadow:inset 0 0 24px #0008}.vault-light{display:none}
+.control-deck{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:20px;border:1px solid #aa855244;border-top-color:#e1bd7088;border-radius:18px;padding:14px 18px;background:linear-gradient(160deg,#23162eeb,#0d0b1bf5);box-shadow:inset 0 1px #f5df9d10,0 12px 30px #0007}
+.meters{grid-template-columns:1fr 1fr 1.35fr;gap:0;align-items:center}.meter,.meter.win{border:0;border-right:1px solid #c8a66a26;border-radius:0;background:none;box-shadow:none;padding:4px 14px}.meter:last-child{border:0}.meter .label{font-size:9px;letter-spacing:.18em;color:#b8a7bd;margin-bottom:7px}.meter strong{font-size:clamp(15px,1.8vw,22px);text-shadow:none;font-weight:700;line-height:1.2}.meter.win strong{color:#ffe398;text-shadow:none}
+.bet-stepper{display:flex;align-items:center;justify-content:center;gap:10px}.bet-stepper strong{min-width:56px}.bet-stepper button{flex:none;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid #c4a76c55;background:#fff1d507;color:#f5ddb1;font:500 21px system-ui;cursor:pointer;transition:background .18s,transform .18s}.bet-stepper button:hover:enabled{background:#eec57122}.bet-stepper button:active:enabled{transform:scale(.92)}
+.controls{display:grid;grid-template-columns:44px 66px 52px 76px;grid-template-areas:'info buy auto spin';gap:9px;align-items:center}.ctrl{border:1px solid #b7a07633;background:#f8e8ff05;border-radius:10px;min-height:44px;padding:6px;font-size:9px;letter-spacing:.08em;box-shadow:none;color:#d7c9de;text-shadow:none;line-height:1.45}.ctrl.ghost{color:#d7c9de}.ctrl.accent{background:#c7983320;border-color:#b5914a77;color:#ebce8c}.ctrl.active{box-shadow:none;border-color:#64d7da;color:#8cf2ef;background:#64d7da13}.ctrl:active{transform:scale(.96);box-shadow:none}.ctrl:hover:enabled{filter:brightness(1.2)}#auto-left{display:block;font-size:10px;font-variant-numeric:tabular-nums}
+.spin{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:0;width:76px;height:76px;min-height:0;padding:5px;border-radius:50%;border:2px solid #ffe9a1;background:linear-gradient(145deg,#fff1aa,#efbc52 42%,#bc7627);color:#32182c;box-shadow:inset 0 1px #fffce0,inset 0 -3px #96521f,0 0 0 4px #d9a64c19,0 5px 16px #0006;text-shadow:none;letter-spacing:.12em;font-size:9px}.spin svg{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.spin::before,.spin::after{content:none}.spin.busy{animation:none;opacity:.72}.spin.busy svg{animation:spin-indicator 1.8s linear infinite}.spin:active{transform:scale(.96)}button:disabled{cursor:default;filter:saturate(.55);opacity:.38}.spin:disabled{opacity:.7}.ctrl:disabled:hover{filter:saturate(.55)}
+@keyframes spin-indicator{to{transform:rotate(360deg)}}
+.win-banner,.bonus-intro{display:flex;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .28s ease,visibility .28s ease}.win-banner.show,.bonus-intro.show{opacity:1;visibility:visible;pointer-events:auto}.win-card,.bonus-card{transform:translateY(12px) scale(.96);transition:transform .32s cubic-bezier(.2,.7,.2,1)}.show>.win-card,.show>.bonus-card{transform:translateY(0) scale(1)}
+@media(max-width:760px){.control-deck{grid-template-columns:1fr;gap:12px;padding:12px}.meters{grid-template-columns:1fr 1fr 1.4fr}.meter{padding:3px 8px}.meter strong{font-size:17px}.controls{display:flex;justify-content:center;gap:14px}.ctrl{min-width:57px;min-height:42px}.spin{width:66px;height:66px}.spin svg{width:34px;height:34px}.bet-stepper{gap:6px}.bet-stepper strong{min-width:44px}.bet-stepper button{width:27px;height:29px}.meter .label{font-size:8px}.reel-frame{width:100%}.game-title{width:210px}#btn-auto{min-height:42px}.control-deck .controls{grid-template-areas:none}}
+@media(max-height:620px) and (orientation:landscape){#app,#app:has(.bonus-bar.show){grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;gap:6px}.topbar,.stage,.control-deck{grid-column:1;grid-row:auto}.bonus-bar.show{position:absolute;top:10px;right:70px;z-index:5;font-size:9px}.stage-heading{display:none}.game-title{width:170px}.topbar{min-height:42px}.control-deck{grid-template-columns:1fr auto;padding:6px 12px;gap:10px}.control-deck .controls{display:grid;grid-template-columns:40px 52px 44px 52px;gap:7px;grid-template-areas:'info buy auto spin'}.control-deck .ctrl{min-width:0;min-height:36px}.spin{width:52px;height:52px}.spin svg{width:28px;height:28px}.spin span{font-size:7px}.meter strong{font-size:16px}.meter .label{margin-bottom:3px}.reel-frame{width:min(100%,calc((100dvh - 140px)*1.6));--rail:25px}.status-line{font-size:10px;min-height:12px}.icon-btn{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){.spin.busy svg{animation:none}.win-banner,.bonus-intro,.win-card,.bonus-card{transition:none}}
+
+/* Keep the 1200×960 cabinet artwork at its native 5:4 ratio. The reel glass
+   follows the transparent opening in that artwork at every viewport size. */
+.stage{container-type:size;position:relative;isolation:isolate}
+.stage::before{
+  content:'';position:absolute;inset:0 -8%;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 45%,#b579e63b,transparent 49%),
+    radial-gradient(ellipse at 20% 65%,#35d5d42b,transparent 32%),
+    radial-gradient(ellipse at 80% 35%,#ffbc6922,transparent 32%);
+  animation:stage-aura 9s ease-in-out infinite alternate;
+}
+@keyframes stage-aura{from{opacity:.55;transform:scale(.96)}to{opacity:1;transform:scale(1.04)}}
+.reel-frame{
+  flex:none;
+  width:min(100%,calc((100cqh - 42px)*1.25));
+  height:auto;
+  aspect-ratio:5 / 4;
+  max-width:100%;
+  filter:drop-shadow(0 14px 18px #050416b8) drop-shadow(0 0 18px #96704855);
+}
+.reel-frame::after{content:none}
+.vault-surround{display:block;width:100%;height:100%;object-fit:contain}
+.reel-window{
+  inset:16.3% 10.8% 18.4%;
+  border:0;
+  border-radius:2px;
+  isolation:isolate;
+  background:radial-gradient(ellipse at 50% 110%,#77429755,transparent 65%),
+    radial-gradient(ellipse at 50% -15%,#57dce73b,transparent 62%),
+    linear-gradient(125deg,#11172b,#221330 50%,#101a2b);
+  box-shadow:inset 0 0 32px #020818ca,inset 0 0 2px 2px #ffe6a85e;
+}
+.reel-window::before{
+  content:'';position:absolute;inset:-35% -20%;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse at 18% 37%,#9c53eaa0,transparent 32%),
+    radial-gradient(ellipse at 78% 63%,#36d4e698,transparent 34%),
+    linear-gradient(105deg,transparent 29%,#ffe2a936 47%,transparent 61%);
+  animation:glass-drift 11s ease-in-out infinite alternate;
+}
+.reel-window::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(circle,#ffe5ae99 0 1px,transparent 2px) 11px 18px / 92px 83px,
+    radial-gradient(circle,#73e2e59c 0 1px,transparent 2px) 45px 5px / 127px 109px,
+    repeating-linear-gradient(90deg,transparent 0,transparent calc(20% - 1px),#ddbb7944 20%);
+  opacity:.45;
+}
+#reels{position:relative;z-index:1}
+@keyframes glass-drift{from{transform:translate(-7%,-3%) scale(1)}to{transform:translate(7%,4%) scale(1.07)}}
+@media(max-width:760px){.reel-frame{width:min(100%,calc((100cqh - 40px)*1.25))}}
+@media(max-height:620px) and (orientation:landscape){.reel-frame{width:min(100%,calc((100cqh - 14px)*1.25))}}
+@media(prefers-reduced-motion:reduce){.reel-window::before,.stage::before{animation:none}}
+
+/* All dialogs share the same viewport-centered anchor. The rules panel is a
+   scrollable page inside that anchor, while celebration cards stay centered. */
+.panel{
+  top:50%;bottom:auto;width:min(560px,calc(100vw - 28px));max-height:min(86dvh,820px);
+  transform:translate(-50%,calc(-50% + 24px)) scale(.97);
+  border:1px solid #d7a75d;border-radius:22px;
+  box-shadow:0 28px 90px #03000de0,inset 0 1px #ffe3a088;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:transform .3s cubic-bezier(.2,.7,.2,1),opacity .24s ease,visibility .24s ease;
+}
+.panel.open{transform:translate(-50%,-50%) scale(1);opacity:1;visibility:visible;pointer-events:auto}
+.panel.tall{max-height:min(90dvh,880px)}
+.rules-panel{width:min(920px,calc(100vw - 28px));padding:24px;overflow:hidden}
+.rules-panel::before{content:'';position:absolute;inset:0 0 auto;height:4px;pointer-events:none;background:linear-gradient(90deg,transparent,#54d8ea,#ffd181,#a96de0,transparent)}
+.rules-header{align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #bb8d6144}
+.rules-header h2{font-size:clamp(1.35rem,3vw,2rem);letter-spacing:.12em}
+.rules-tabs{gap:8px;margin:0 0 14px;padding-bottom:10px}
+.rules-tab{font-size:.76rem;padding:10px 14px}
+.rules-body{padding:2px 8px 10px 2px;scrollbar-color:#b58353 #1b102c}
+.rules-pane{max-width:790px;margin:auto}
+.rules-lead{font-size:.96rem;line-height:1.62}
+.rules-steps{gap:14px}
+.rules-steps li,.sym-card,.gauge-card,.buy-guide-card{background:linear-gradient(145deg,#322041,#180f29);border:1px solid #966a4f77;border-radius:14px;padding:16px}
+.rules-steps li{grid-template-columns:38px 1fr}
+.rules-steps p,.sym-card p{font-size:.88rem;line-height:1.55}
+.rules-overview{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
+.rules-overview div{display:grid;gap:2px;padding:14px;border:1px solid #b9925977;border-radius:12px;background:radial-gradient(circle at top,#704e5b55,#24152f 75%);text-align:center}
+.rules-overview strong{font-size:clamp(1.1rem,2.6vw,1.55rem);color:#ffe3a1;letter-spacing:.04em}
+.rules-overview span{font-size:.64rem;font-weight:800;letter-spacing:.16em;color:#d4bcd7}
+.pay-table tbody tr:nth-child(even){background:#ffffff08}
+.pay-table tbody tr:hover{background:#f6d27413}
+.pay-table .pay-val{font-variant-numeric:tabular-nums}
+.win-banner,.bonus-intro{display:grid;place-items:center;padding:20px;box-sizing:border-box}
+.win-card,.bonus-card{width:min(100%,420px);box-sizing:border-box;margin:auto}
+@media(max-width:620px){
+  .rules-panel{padding:16px 14px;width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}
+  .rules-tabs{gap:6px}.rules-tab{padding:9px 11px;font-size:.7rem}
+  .rules-steps li,.sym-card{padding:12px}
+  .rules-overview div{padding:10px 5px}
+  .rules-overview span{font-size:.55rem}
+}
+@media(prefers-reduced-motion:reduce){.panel{transition:none}}
