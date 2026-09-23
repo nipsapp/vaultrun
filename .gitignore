@@ -1,0 +1,14 @@
+node_modules/
+server/node_modules/
+server/data/
+*.sqlite
+*.sqlite-*
+.env
+server/.env
+.DS_Store
+_bundle_extract/
+_bundle_index.json
+*.log
+.utmp/
+Library/
+Temp/

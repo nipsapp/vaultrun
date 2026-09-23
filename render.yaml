@@ -1,0 +1,29 @@
+# https://docs.render.com/blueprint-spec
+services:
+  - type: web
+    name: vaultrun
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: DATABASE_PATH
+        value: ./data/vaultrun.sqlite
+      - key: RNG_MODE
+        value: crypto
+      - key: RGS_MODE
+        value: local
+      - key: STARTING_BALANCE
+        value: "10000"
+      - key: CURRENCY
+        value: USD
+      - key: HOST
+        value: "0.0.0.0"

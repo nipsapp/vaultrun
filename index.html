@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#18052f" />
+  <meta name="description" content="Vault Run — 6×3 ways lock & respin slot. Barrel wilds, expanding bonus board." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23020617'/%3E%3Ccircle cx='32' cy='32' r='18' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <title>Vault Run</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/casino.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <button id="btn-menu" class="icon-btn" aria-label="Menu">☰</button>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>VAULT RUN</h1>
+          <p class="tag">THE ULTIMATE VAULT SLOT</p>
+        </div>
+      </div>
+      <button id="btn-mute" class="icon-btn" aria-label="Mute">🔊</button>
+    </header>
+
+    <div id="bonus-bar" class="bonus-bar" aria-live="polite">
+      <span id="bonus-name">Kingpin</span>
+      <span id="bonus-spins">10 SPINS</span>
+    </div>
+
+    <main class="stage">
+      <div class="stage-heading"><span>✦ LOCK &amp; RESPIN ✦</span><strong>FORTUNE FAVORS THE BOLD</strong><span>✦ UP TO 40,000× ✦</span></div>
+      <div class="reel-frame">
+        <canvas id="reels" width="720" height="360"></canvas>
+      </div>
+      <p id="status-line" class="status-line">Loading…</p>
+    </main>
+
+    <section class="meters">
+      <div class="meter">
+        <span class="label">BALANCE</span>
+        <strong id="bal-val">0.00</strong>
+      </div>
+      <div class="meter win">
+        <span class="label">WIN</span>
+        <strong id="win-val">0.00</strong>
+      </div>
+      <div class="meter">
+        <span class="label">BET</span>
+        <strong id="bet-val">1.00</strong>
+      </div>
+    </section>
+
+    <footer class="controls">
+      <button id="btn-info" class="ctrl ghost">INFO</button>
+      <button id="btn-bet-minus" class="ctrl">−</button>
+      <button id="btn-spin" class="spin" aria-label="Spin">SPIN</button>
+      <button id="btn-bet-plus" class="ctrl">+</button>
+      <button id="btn-buy" class="ctrl accent">BUY</button>
+      <button id="btn-auto" class="ctrl ghost">AUTO <span id="auto-left"></span></button>
+    </footer>
+  </div>
+
+  <div id="overlay" class="overlay" data-close></div>
+
+  <aside id="panel-buy" class="panel">
+    <header>
+      <h2>Feature Buy</h2>
+      <button class="icon-btn" data-close>×</button>
+    </header>
+    <p class="panel-note">Choose your vault feature. Prices scale with your current bet.</p>
+    <button class="buy-row" data-buy="kingpin">
+      <div>
+        <strong>Kingpin</strong>
+        <small>3 scatters · 10 FS · board 6×5</small>
+      </div>
+      <span id="cost-kingpin">80.00</span>
+    </button>
+    <button class="buy-row" data-buy="moneyrun">
+      <div>
+        <strong>Money Run</strong>
+        <small>4 scatters · 12 FS · board 6×6</small>
+      </div>
+      <span id="cost-moneyrun">200.00</span>
+    </button>
+    <button class="buy-row" data-buy="mystery">
+      <div>
+        <strong>Mystery Bonus</strong>
+        <small>51% dead · 40% Money Run · 8% Payday · 1% Mob Job</small>
+      </div>
+      <span id="cost-mystery">100.00</span>
+    </button>
+    <h3 class="subhead">Enhanced Spins</h3>
+    <button class="buy-row" data-enhanced="heat">
+      <div>
+        <strong>Enhanced Spin</strong>
+        <small>3× bet · hotter strips</small>
+      </div>
+      <span id="cost-heat">3.00</span>
+    </button>
+    <button class="buy-row" data-enhanced="overload">
+      <div>
+        <strong>Hot Enhanced</strong>
+        <small>25× bet · guarantees 4+ scatters</small>
+      </div>
+      <span id="cost-overload">25.00</span>
+    </button>
+    <button class="buy-row" data-enhanced="feature">
+      <div>
+        <strong>Feature Spin</strong>
+        <small>500× bet · random 6×5–7 board · 4 wilds</small>
+      </div>
+      <span id="cost-feature">500.00</span>
+    </button>
+  </aside>
+
+  <aside id="panel-auto" class="panel">
+    <header>
+      <h2>Autoplay</h2>
+      <button class="icon-btn" data-close>×</button>
+    </header>
+    <div class="auto-grid">
+      <button data-auto="10">10</button>
+      <button data-auto="25">25</button>
+      <button data-auto="50">50</button>
+      <button data-auto="100">100</button>
+    </div>
+  </aside>
+
+  <aside id="panel-info" class="panel tall">
+    <header>
+      <h2>How to Play</h2>
+      <button class="icon-btn" data-close>×</button>
+    </header>
+    <div class="info-body">
+      <h3>Ways</h3>
+      <p>Base game is <strong>6 wide × 3 high</strong> ways (left to right). Wild substitutes for pay symbols.</p>
+      <h3>Lock &amp; Respin</h3>
+      <p>When the same <strong>premium</strong> symbol lands on reels <strong>1, 2 and 3</strong>, that symbol and all wilds <strong>lock</strong>. Everything else respins. Locked symbols drop to the bottom. If another locked symbol or wild lands, it respins again until none land.</p>
+      <h3>Barrel Wilds</h3>
+      <p>If wilds are on the board and a pay symbol covers all reels left to right, wilds turn gold. After respins finish, barrels open and reveal a <strong>global multiplier</strong>: 2×, 3×, 5×, 10×, 15× or 20× applied to all wins.</p>
+      <h3>Bonus Board</h3>
+      <p>Free spins expand the board (up to 6×7). Extra rows start <strong>blocked</strong> with ↔ / ↕ arrows. When a locked symbol or wild lands next to a block, it breaks — arrows clear the row or column (Space Miners–style).</p>
+      <h3>Free Spins</h3>
+      <ul>
+        <li><strong>Kingpin</strong> — 3 scatters · 10 FS · 6×5</li>
+        <li><strong>Money Run</strong> — 4 scatters · 12 FS · 6×6</li>
+        <li><strong>Payday</strong> — 5 scatters · 12 FS · 6×6 · min 5× barrel</li>
+        <li><strong>Mob Job</strong> — 6 scatters · 12 FS · 6×7 · min 10× barrel</li>
+      </ul>
+      <p>In bonus, each scatter awards +1 free spin.</p>
+      <h3>Feature Spin</h3>
+      <p><strong>500× bet</strong> — random board 6×5 / 6×6 / 6×7 with <strong>4 wilds</strong> guaranteed. Extra rows start blocked.</p>
+      <h3>Max Win</h3>
+      <p>40,000× bet. Demo client RNG — swap to certified RGS before certification.</p>
+    </div>
+  </aside>
+
+  <aside id="panel-menu" class="panel">
+    <header>
+      <h2>Vault Run</h2>
+      <button class="icon-btn" data-close>×</button>
+    </header>
+    <p class="panel-note">Vault Run · Lock symbols, trigger respins, and chase the jackpot.</p>
+    <button class="buy-row" data-close>
+      <div><strong>Continue</strong><small>Return to game</small></div>
+      <span>→</span>
+    </button>
+  </aside>
+
+  <div id="win-banner" class="win-banner">
+    <div class="win-card">
+      <p id="win-banner-title">BIG WIN</p>
+      <p id="win-banner-amount">0.00</p>
+      <small>Tap to continue</small>
+    </div>
+  </div>
+
+  <div id="bonus-intro" class="bonus-intro">
+    <div class="bonus-card">
+      <p class="eyebrow">FEATURE UNLOCKED</p>
+      <h2 id="bonus-intro-title">KINGPIN</h2>
+      <p id="bonus-intro-sub">10 Free Spins</p>
+      <small>Tap to start</small>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

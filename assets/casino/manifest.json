@@ -1,0 +1,106 @@
+{
+  "symbols": {
+    "BONUS": [
+      "symbols/BONUS/00.webp",
+      "symbols/BONUS/01.webp",
+      "symbols/BONUS/02.webp",
+      "symbols/BONUS/03.webp"
+    ],
+    "COIN": [
+      "symbols/COIN/00.webp",
+      "symbols/COIN/01.webp",
+      "symbols/COIN/02.webp",
+      "symbols/COIN/03.webp"
+    ],
+    "FREESPIN": [
+      "symbols/FREESPIN/00.webp",
+      "symbols/FREESPIN/01.webp",
+      "symbols/FREESPIN/02.webp",
+      "symbols/FREESPIN/03.webp"
+    ],
+    "H1": [
+      "symbols/H1/00.webp",
+      "symbols/H1/01.webp",
+      "symbols/H1/02.webp",
+      "symbols/H1/03.webp"
+    ],
+    "H2": [
+      "symbols/H2/00.webp",
+      "symbols/H2/01.webp",
+      "symbols/H2/02.webp",
+      "symbols/H2/03.webp"
+    ],
+    "H3": [
+      "symbols/H3/00.webp",
+      "symbols/H3/01.webp",
+      "symbols/H3/02.webp",
+      "symbols/H3/03.webp"
+    ],
+    "H4": [
+      "symbols/H4/00.webp",
+      "symbols/H4/01.webp",
+      "symbols/H4/02.webp",
+      "symbols/H4/03.webp"
+    ],
+    "H5": [
+      "symbols/H5/00.webp",
+      "symbols/H5/01.webp",
+      "symbols/H5/02.webp",
+      "symbols/H5/03.webp"
+    ],
+    "H6": [
+      "symbols/H6/00.webp",
+      "symbols/H6/01.webp",
+      "symbols/H6/02.webp",
+      "symbols/H6/03.webp"
+    ],
+    "JACKPOT": [
+      "symbols/JACKPOT/00.webp",
+      "symbols/JACKPOT/01.webp",
+      "symbols/JACKPOT/02.webp",
+      "symbols/JACKPOT/03.webp"
+    ],
+    "L1": [
+      "symbols/L1/00.webp",
+      "symbols/L1/01.webp",
+      "symbols/L1/02.webp",
+      "symbols/L1/03.webp"
+    ],
+    "L2": [
+      "symbols/L2/00.webp",
+      "symbols/L2/01.webp",
+      "symbols/L2/02.webp",
+      "symbols/L2/03.webp"
+    ],
+    "L3": [
+      "symbols/L3/00.webp",
+      "symbols/L3/01.webp",
+      "symbols/L3/02.webp",
+      "symbols/L3/03.webp"
+    ],
+    "L4": [
+      "symbols/L4/00.webp",
+      "symbols/L4/01.webp",
+      "symbols/L4/02.webp",
+      "symbols/L4/03.webp"
+    ],
+    "L5": [
+      "symbols/L5/00.webp",
+      "symbols/L5/01.webp",
+      "symbols/L5/02.webp",
+      "symbols/L5/03.webp"
+    ],
+    "SCAT": [
+      "symbols/SCAT/00.webp",
+      "symbols/SCAT/01.webp",
+      "symbols/SCAT/02.webp",
+      "symbols/SCAT/03.webp"
+    ],
+    "WILD": [
+      "symbols/WILD/00.webp",
+      "symbols/WILD/01.webp",
+      "symbols/WILD/02.webp",
+      "symbols/WILD/03.webp"
+    ]
+  }
+}
