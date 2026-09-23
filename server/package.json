@@ -11,7 +11,7 @@
     "test": "node src/game/selftest.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
