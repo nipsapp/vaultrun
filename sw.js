@@ -1,5 +1,5 @@
 /* Vault Run service worker — offline shell for PWA / store WebView */
-const CACHE = "vaultrun-v1.5.1-vault-art";
+const CACHE = "vaultrun-v1.6.0-rules";
 const ASSETS = [
   "./",
   "./index.html",

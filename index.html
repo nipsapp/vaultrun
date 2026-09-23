@@ -124,22 +124,202 @@
     </div>
   </aside>
 
-  <aside id="panel-info" class="panel tall">
-    <header>
-      <h2>How to Play</h2>
-      <button class="icon-btn" data-close>×</button>
+  <aside id="panel-info" class="panel tall rules-panel" aria-label="Game rules">
+    <header class="rules-header">
+      <div>
+        <p class="rules-eyebrow">Circuit Breach</p>
+        <h2>Game Rules</h2>
+      </div>
+      <button class="icon-btn" data-close aria-label="Close rules">×</button>
     </header>
-    <div class="info-body">
-      <h3>Ways</h3>
-      <p>Base game is <strong>5 wide × 4 high</strong> ways (left to right). Drill Wilds substitute for pay symbols and carry a personal multiplier.</p>
-      <h3>Tumble &amp; Breach Mult</h3>
-      <p>Winning symbols explode and new ones tumble in. Each cascade advances the <strong>Breach Mult</strong> (1× → 2× → 3× → 5× → 8× → 12×).</p>
-      <h3>Keys &amp; Cash Chips</h3>
-      <p>After cascades settle, every <strong>Key</strong> collects the sum of all visible <strong>Cash Chip</strong> values (× bet × number of keys).</p>
-      <h3>Vault Breach</h3>
-      <p>Land <strong>3+ Circuit</strong> scatters to enter free spins. One feature — scatter count only changes spin count and starting Vault Gauge (Safe Crack → Strongroom → Vault Floor). Land 2+ Keys in a cascade to upgrade the Gauge.</p>
-      <h3>Max Win</h3>
-      <p>20,000× bet. Math id: Circuit Breach — built for Stake Engine originality review.</p>
+
+    <nav class="rules-tabs" role="tablist" aria-label="Rules sections">
+      <button type="button" class="rules-tab active" role="tab" aria-selected="true" data-rules-tab="play">How to Play</button>
+      <button type="button" class="rules-tab" role="tab" aria-selected="false" data-rules-tab="symbols">Symbols</button>
+      <button type="button" class="rules-tab" role="tab" aria-selected="false" data-rules-tab="pays">Paytable</button>
+      <button type="button" class="rules-tab" role="tab" aria-selected="false" data-rules-tab="feature">Vault Breach</button>
+      <button type="button" class="rules-tab" role="tab" aria-selected="false" data-rules-tab="buy">Feature Buy</button>
+      <button type="button" class="rules-tab" role="tab" aria-selected="false" data-rules-tab="limits">Limits</button>
+    </nav>
+
+    <div class="rules-body">
+      <section class="rules-pane active" id="rules-play" role="tabpanel" data-rules-pane="play">
+        <p class="rules-lead">Crack the vault in three moves: <strong>tumble</strong> wins, <strong>collect</strong> chips with keys, then land Circuits to <strong>breach</strong>.</p>
+
+        <ol class="rules-steps">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <strong>Spin the 5×4 grid</strong>
+              <p>Pays are left-to-right <em>ways</em> — matching symbols on adjacent reels from the left. Up to <strong>1,024 ways</strong>.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <strong>Wins tumble</strong>
+              <p>Winning symbols explode. New symbols fall in. Every cascade win steps up the <strong>Breach Mult</strong>:</p>
+              <div class="mult-ladder" aria-label="Breach multiplier ladder">
+                <span>1×</span><span>2×</span><span>3×</span><span>5×</span><span>8×</span><span class="peak">12×</span>
+              </div>
+              <p class="rules-note">Breach Mult resets on the next paid spin.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <strong>Keys collect Cash Chips</strong>
+              <p>When tumbles stop, each <strong>Key</strong> collects every visible Cash Chip:</p>
+              <p class="formula">Collect = bet × (sum of chip faces) × (number of keys)</p>
+              <p>You need at least one Key and one Chip. Two or more Keys can also nudge Breach Mult / upgrade the Vault Gauge in free spins.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">4</span>
+            <div>
+              <strong>3+ Circuits → Vault Breach</strong>
+              <p>Land three or more Circuit scatters anywhere to start free spins. Scatter count sets spin count and starting Vault Gauge.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="rules-pane" id="rules-symbols" role="tabpanel" data-rules-pane="symbols" hidden>
+        <p class="rules-lead">Special symbols do the heavy lifting. Pay symbols are listed under Paytable.</p>
+        <div class="symbol-guide">
+          <article class="sym-card">
+            <img src="assets/casino/symbols/WILD/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <div>
+              <h3>Drill Wild</h3>
+              <p>Substitutes for all pay symbols (not Key, Chip, or Circuit). Each Drill has its own mult: <strong>2× / 3× / 5× / 10×</strong>. Wild mults on a win multiply together (capped at <strong>50×</strong>) before Breach Mult.</p>
+            </div>
+          </article>
+          <article class="sym-card">
+            <img src="assets/casino/symbols/FREESPIN/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <div>
+              <h3>Key</h3>
+              <p>Does not pay ways. After cascades, every Key collects all Cash Chip values on the board.</p>
+            </div>
+          </article>
+          <article class="sym-card">
+            <img src="assets/casino/symbols/COIN/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <div>
+              <h3>Cash Chip</h3>
+              <p>Face values × bet: <strong>0.5 · 1 · 2 · 5 · 10 · 25 · 50 · 100</strong>. Collected only when Keys are present.</p>
+            </div>
+          </article>
+          <article class="sym-card">
+            <img src="assets/casino/symbols/SCAT/00.webp" alt="" width="72" height="72" loading="lazy" />
+            <div>
+              <h3>Circuit Scatter</h3>
+              <p><strong>3+</strong> anywhere triggers Vault Breach free spins. During free spins, 3+ Circuits add <strong>+2 spins</strong>.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="rules-pane" id="rules-pays" role="tabpanel" data-rules-pane="pays" hidden>
+        <p class="rules-lead">Pays are × your total bet × number of ways × wild mult × Breach Mult. Lengths below are 3 / 4 / 5 of a kind.</p>
+        <div class="pay-table-wrap">
+          <table class="pay-table" id="rules-pay-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>3</th>
+                <th>4</th>
+                <th>5</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- filled from VR.CONFIG by ui.js -->
+            </tbody>
+          </table>
+        </div>
+        <p class="rules-note">High symbols (Crown → Lens) pay more. Lows are Ace–Jack.</p>
+      </section>
+
+      <section class="rules-pane" id="rules-feature" role="tabpanel" data-rules-pane="feature" hidden>
+        <p class="rules-lead">One free-spin feature: <strong>Vault Breach</strong>. Scatter count only changes how many spins you start with and which Vault Gauge level you enter.</p>
+
+        <div class="rules-table-wrap">
+          <table class="rules-table">
+            <thead>
+              <tr><th>Circuits</th><th>Free spins</th><th>Start gauge</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>3</td><td>8</td><td>1 — Safe Crack</td></tr>
+              <tr><td>4</td><td>10</td><td>1 — Safe Crack</td></tr>
+              <tr><td>5</td><td>12</td><td>2 — Strongroom</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="rules-h3">Vault Gauge</h3>
+        <p>Levels upgrade when you land <strong>2+ Keys</strong> in one cascade/collect sequence during free spins (max level 3).</p>
+        <div class="gauge-cards">
+          <article class="gauge-card">
+            <span class="gauge-lvl">Lv 1</span>
+            <strong>Safe Crack</strong>
+            <ul>
+              <li>Start Breach from <strong>2×</strong></li>
+              <li>Sticky Drill chance <strong>10%</strong></li>
+              <li>Standard chip weights</li>
+            </ul>
+          </article>
+          <article class="gauge-card">
+            <span class="gauge-lvl">Lv 2</span>
+            <strong>Strongroom</strong>
+            <ul>
+              <li>Start Breach from <strong>3×</strong></li>
+              <li>Sticky Drill chance <strong>25%</strong></li>
+              <li>Mid chips more common</li>
+            </ul>
+          </article>
+          <article class="gauge-card hot">
+            <span class="gauge-lvl">Lv 3</span>
+            <strong>Vault Floor</strong>
+            <ul>
+              <li>Start Breach from <strong>8×</strong></li>
+              <li>Sticky Drill chance <strong>40%</strong></li>
+              <li>High chips more common</li>
+            </ul>
+          </article>
+        </div>
+        <p class="rules-note">Retrigger: 3+ Circuits during FS add +2 spins (soft cap ≈ 24 total free spins).</p>
+      </section>
+
+      <section class="rules-pane" id="rules-buy" role="tabpanel" data-rules-pane="buy" hidden>
+        <p class="rules-lead">Buy a feature instead of waiting for natural Circuits. Cost scales with your current bet.</p>
+        <div class="buy-guide">
+          <article class="buy-guide-card">
+            <strong>Vault Breach</strong>
+            <span class="cost-tag">80× bet</span>
+            <p>Force 3 Circuits · 8 free spins · Gauge 1 (Safe Crack)</p>
+          </article>
+          <article class="buy-guide-card">
+            <strong>Strongroom Buy</strong>
+            <span class="cost-tag">200× bet</span>
+            <p>Force 4 Circuits · 10 free spins · Gauge 2 (Strongroom)</p>
+          </article>
+          <article class="buy-guide-card hot">
+            <strong>Vault Floor Buy</strong>
+            <span class="cost-tag">500× bet</span>
+            <p>Force 5 Circuits · Gauge 3 · 3 sticky Drills on the first free-spin board</p>
+          </article>
+        </div>
+        <p class="rules-note">Open the <strong>BUY</strong> button on the control bar to purchase. Prices shown there update with your bet.</p>
+      </section>
+
+      <section class="rules-pane" id="rules-limits" role="tabpanel" data-rules-pane="limits" hidden>
+        <ul class="limits-list">
+          <li><strong>Max win</strong> — 20,000× your bet. The round ends if the cap is hit.</li>
+          <li><strong>RTP target</strong> — 96% across long-run play (base + features).</li>
+          <li><strong>Grid</strong> — 5 reels × 4 rows · left-to-right ways (3–5 of a kind).</li>
+          <li><strong>Cascade cap</strong> — up to 20 tumbles per paid spin.</li>
+          <li><strong>Malfunction</strong> — voids all pays and plays. Incomplete rounds may be restored or voided by the operator.</li>
+        </ul>
+        <p class="rules-footnote">Vault Run · Circuit Breach v2.0.0 · Play responsibly.</p>
+      </section>
     </div>
   </aside>
 

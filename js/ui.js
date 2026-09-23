@@ -14,6 +14,67 @@ VR.UI = (function () {
     });
   }
 
+  function artPath(id) {
+    const alias = (VR.CONFIG.artAlias && VR.CONFIG.artAlias[id]) || id;
+    return "assets/casino/symbols/" + alias + "/00.webp";
+  }
+
+  function fillPayTable() {
+    const tbody = $("#rules-pay-table tbody");
+    if (!tbody || tbody.dataset.ready === "1") return;
+    const order = ["H1", "H2", "H3", "H4", "H5", "L1", "L2", "L3", "L4"];
+    const pays = VR.CONFIG.pays || {};
+    const symbols = VR.CONFIG.symbols || {};
+    tbody.innerHTML = order
+      .filter((id) => pays[id])
+      .map((id) => {
+        const name = (symbols[id] && symbols[id].name) || id;
+        const row = pays[id];
+        const fmt = (n) => (Number(n) % 1 === 0 ? n + "×" : n + "×");
+        return (
+          "<tr>" +
+          '<td><span class="sym-cell"><img src="' +
+          artPath(id) +
+          '" alt="" width="40" height="40" loading="lazy" /><span>' +
+          name +
+          "</span></span></td>" +
+          '<td class="pay-val">' +
+          fmt(row[2]) +
+          "</td>" +
+          '<td class="pay-val">' +
+          fmt(row[3]) +
+          "</td>" +
+          '<td class="pay-val">' +
+          fmt(row[4]) +
+          "</td>" +
+          "</tr>"
+        );
+      })
+      .join("");
+    tbody.dataset.ready = "1";
+  }
+
+  function setRulesTab(tabId) {
+    const id = tabId || "play";
+    $$(".rules-tab").forEach((btn) => {
+      const on = btn.getAttribute("data-rules-tab") === id;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", String(on));
+    });
+    $$(".rules-pane").forEach((pane) => {
+      const on = pane.getAttribute("data-rules-pane") === id;
+      pane.classList.toggle("active", on);
+      pane.hidden = !on;
+    });
+    if (id === "pays") fillPayTable();
+  }
+
+  function bindRulesTabs() {
+    $$("[data-rules-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => setRulesTab(btn.getAttribute("data-rules-tab")));
+    });
+  }
+
   function bind(state, handlers) {
     $("#btn-spin").addEventListener("click", () => handlers.spin());
     $("#btn-bet-minus").addEventListener("click", () => handlers.bet(-1));
@@ -47,11 +108,14 @@ VR.UI = (function () {
       });
     });
 
+    bindRulesTabs();
+
     document.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
         e.preventDefault();
         handlers.spin();
       }
+      if (e.code === "Escape") closePanels();
     });
   }
 
@@ -61,6 +125,7 @@ VR.UI = (function () {
     if (el) {
       el.classList.add("open");
       $("#overlay").classList.add("open");
+      if (id === "info") setRulesTab("play");
     }
   }
 
